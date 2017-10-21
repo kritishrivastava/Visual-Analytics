@@ -91,11 +91,9 @@ def nlp_1(status):
     global nuetral_stream1
     global all_tweets_stream1
     global kmeans_data_stream1
-    global total_tweet_count
     global tweet_count_stream1
 
-    # Update tweet counts
-    total_tweet_count += 1
+    # Update tweet count
     tweet_count_stream1 += 1
     all_tweets_stream1.append(status.text)
     # Process tweets and update term frequencies
@@ -133,11 +131,9 @@ def nlp_2(status):
     global nuetral_stream2
     global all_tweets_stream2
     global kmeans_data_stream2
-    global total_tweet_count
     global tweet_count_stream2
 
     # Update tweet counts
-    total_tweet_count += 1
     tweet_count_stream2 += 1
     all_tweets_stream2.append(status.text)
     # Process tweets and update term frequencies
@@ -184,8 +180,10 @@ class listener_2(tweepy.StreamListener):
             print("Hit rate limit")
             return False
 
+# Function to update all the visualizations after time step
 def update_visualization():
     global df_tweet_1
+    ## Updating Line charts
     now = datetime.utcnow()
     min_time = now - timedelta(seconds=500)
     df_tweet_1.drop(df_tweet_1[df_tweet_1.Timestamp < min_time].index, inplace=True)
@@ -198,10 +196,23 @@ def update_visualization():
     ds1.data['x'] = tweet_rate['rounded_time'].tolist()
     ds1.data['y'] = tweet_rate['count'].tolist()
 
-    print(tweet_rate)
-    #plot(tweet_rate)
+    # Updating Pie chart
+    percents = [float(token_count_stream1 / (token_count_stream2 + token_count_stream1)) * 100,
+                float(tweet_count_stream2 / (token_count_stream2 + token_count_stream1)) * 100]
+    # percents = [0,0.15,0.4,0.7,1.0]
+    starts = [0, 0.2]
+    ends = [0.2, 1]
+    print(starts)
+    print(ends)
+    print(percents)
+    pie_datasource['start_angle'] = starts
+    pie_datasource['end_angle'] = ends
+
+
+    # Trigger all plot updates
     ds1.trigger('data', ds1.data, ds1.data)
-    #Timer(2, update_visualization).start()
+    # pie_datasource.trigger('data', pie_datasource.data, pie_datasource.data)
+    # pie_datasource.trigger('change')
 
 
 def get_twitter_api_handle(consumer_key, consumer_secret, access_token, access_token_secret) :
@@ -220,17 +231,32 @@ def create_twitter_stream(api, topic, callback):
 def plot():
     x = 1
 
+doc = curdoc()
 
+# Line chart for tweet rate
 columns = ['Timestamp', 'Tweet', 'rounded_time']
 df_tweet_1 = pd.DataFrame(columns=columns)
 df_tweet_1 = df_tweet_1.fillna(0)
-
-doc = curdoc()
-tweet_rate_plot = figure(plot_width=400, plot_height=400)
+tweet_rate_plot = figure(plot_width=800, plot_height=300)
 line1 = tweet_rate_plot.line(x = [], y = [], line_width=2)
 ds1 = line1.data_source
 
-layout = column(tweet_rate_plot)
+
+# Pie chart for tweet category percentage
+# percents = [float(token_count_stream1/total_tweet_count)*100,float(tweet_count_stream2/total_tweet_count)*100]
+# starts = [p*2*np.pi for p in percents[:-1]]
+# ends = [p*2*np.pi for p in percents[1:]]
+percents = [0,0.7,1.0]
+starts = [0, 0.7]
+ends = [0.7, 1]
+colors = ["red", "green", "blue", "orange", "yellow"]
+tweet_division_plot = figure(x_range=(-1,1), y_range=(-1,1),plot_width=200, plot_height=200)
+pie = tweet_division_plot.wedge(x=0, y=0, radius=1, start_angle=starts, end_angle=ends, color=colors)
+pie_datasource = pie.data_source
+
+
+# Rendering all plots
+layout = column(tweet_rate_plot, tweet_division_plot)
 doc.add_root(layout)
 
 
