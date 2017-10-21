@@ -57,6 +57,9 @@ all_tweets_stream1 = []
 all_tweets_stream2 = []
 kmeans_data_stream1 = []
 kmeans_data_stream2 = []
+total_tweet_count = 0
+tweet_count_stream1= 0
+tweet_count_stream2 = 0
 
 def process_tweet(tweet):
     tweet = p.clean(tweet)
@@ -85,7 +88,12 @@ class listener_1(tweepy.StreamListener):
         global nuetral_stream1
         global all_tweets_stream1
         global kmeans_data_stream1
+        global total_tweet_count
+        global tweet_count_stream1
 
+        # Update tweet counts
+        total_tweet_count +=1
+        tweet_count_stream1 +=1
         all_tweets_stream1.append(status.text)
         # Process tweets and update term frequencies
         list_of_tokens = process_tweet(status.text)
@@ -135,9 +143,14 @@ class listener_2(tweepy.StreamListener):
         global nuetral_stream2
         global all_tweets_stream2
         global kmeans_data_stream2
+        global total_tweet_count
+        global tweet_count_stream2
 
+        # Update tweet counts
+        total_tweet_count +=1
+        tweet_count_stream2 += 1
         all_tweets_stream2.append(status.text)
-        #Process tweets and update term frequencies
+        # Process tweets and update term frequencies
         list_of_tokens = process_tweet(status.text)
         token_count_stream2 = token_count_stream2 + len(list_of_tokens)
         for token in list_of_tokens:
