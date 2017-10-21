@@ -1,6 +1,9 @@
 import tweepy
-from bokeh.sampledata import us_states
 from bokeh.plotting import *
+from datetime import datetime, timedelta
+from bokeh.plotting import figure
+from bokeh.layouts import widgetbox, gridplot, column
+
 from nltk import word_tokenize
 from nltk.corpus import stopwords
 import string
@@ -61,6 +64,10 @@ total_tweet_count = 0
 tweet_count_stream1= 0
 tweet_count_stream2 = 0
 
+def insert_time_series_data_1(ts, msg):
+    global df_tweet_1
+    df_tweet_1.loc[len(df_tweet_1)] = [ts, msg, np.NaN]
+
 def process_tweet(tweet):
     tweet = p.clean(tweet)
     stop = stopwords.words('english') + list(string.punctuation)
@@ -72,55 +79,93 @@ def clustering(data):
     return mbk.labels_
 
 
+def nlp_1(status):
+    global token_count_stream1
+    global tf_stream1
+    global tf_normalized_stream1
+    global top_tf_normalized_stream1
+    global top_count
+    global sentiment_stream1
+    global positive_stream1
+    global negative_stream1
+    global nuetral_stream1
+    global all_tweets_stream1
+    global kmeans_data_stream1
+    global total_tweet_count
+    global tweet_count_stream1
+
+    # Update tweet counts
+    total_tweet_count += 1
+    tweet_count_stream1 += 1
+    all_tweets_stream1.append(status.text)
+    # Process tweets and update term frequencies
+    list_of_tokens = process_tweet(status.text)
+    token_count_stream1 = token_count_stream1 + len(list_of_tokens)
+    for token in list_of_tokens:
+        tf_stream1[token] += 1
+    for token, count in tf_stream1.items():
+        tf_normalized_stream1[token] = float(count / token_count_stream1) * 100
+    # Update the top k most frequent words
+    top_tf_normalized_stream1 = Counter(tf_normalized_stream1).most_common(top_count)
+    # Finding sentiment of the tweet
+    sentiment = TextBlob(status.text).sentiment.polarity
+    sentiment_stream1.append((status.text, sentiment))
+    if sentiment == 0:
+        nuetral_stream1.append(status.text)
+    elif sentiment > 0:
+        positive_stream1.append(status.text)
+    else:
+        negative_stream1.append(status.text)
+    # Updating data from kmeans clustering
+    kmeans_data_stream1.append((status.text, status.created_at, status.source, status.lang))
+
+
+def nlp_2(status):
+    # Using global variables
+    global token_count_stream2
+    global tf_stream2
+    global tf_normalized_stream2
+    global top_tf_normalized_stream2
+    global top_count
+    global sentiment_stream2
+    global positive_stream2
+    global negative_stream2
+    global nuetral_stream2
+    global all_tweets_stream2
+    global kmeans_data_stream2
+    global total_tweet_count
+    global tweet_count_stream2
+
+    # Update tweet counts
+    total_tweet_count += 1
+    tweet_count_stream2 += 1
+    all_tweets_stream2.append(status.text)
+    # Process tweets and update term frequencies
+    list_of_tokens = process_tweet(status.text)
+    token_count_stream2 = token_count_stream2 + len(list_of_tokens)
+    for token in list_of_tokens:
+        tf_stream2[token] += 1
+    for token, count in tf_stream2.items():
+        tf_normalized_stream2[token] = float(count / token_count_stream2) * 100
+    # Update the top k most frequent words
+    top_tf_normalized_stream2 = Counter(tf_normalized_stream2).most_common(top_count)
+    # Finding sentiment of the tweet
+    sentiment = TextBlob(status.text).sentiment.polarity
+    sentiment_stream2.append((status.text, sentiment))
+    if sentiment == 0:
+        nuetral_stream2.append(status.text)
+    elif sentiment > 0:
+        positive_stream2.append(status.text)
+    else:
+        negative_stream2.append(status.text)
+    # Updating data from kmeans clustering
+    kmeans_data_stream2.append((status.text, status.created_at, status.source, status.lang))
 
 class listener_1(tweepy.StreamListener):
 
     def on_status(self, status):
-        global df_tweet_1
-        global token_count_stream1
-        global tf_stream1
-        global tf_normalized_stream1
-        global top_tf_normalized_stream1
-        global top_count
-        global sentiment_stream1
-        global positive_stream1
-        global negative_stream1
-        global nuetral_stream1
-        global all_tweets_stream1
-        global kmeans_data_stream1
-        global total_tweet_count
-        global tweet_count_stream1
-
-        # Update tweet counts
-        total_tweet_count +=1
-        tweet_count_stream1 +=1
-        all_tweets_stream1.append(status.text)
-        # Process tweets and update term frequencies
-        list_of_tokens = process_tweet(status.text)
-        token_count_stream1 = token_count_stream1 + len(list_of_tokens)
-        for token in list_of_tokens:
-            tf_stream1[token] += 1
-        for token, count in tf_stream1.items():
-            tf_normalized_stream1[token] = float(count / token_count_stream1) * 100
-        # Update the top k most frequent words
-        top_tf_normalized_stream1 = Counter(tf_normalized_stream1).most_common(top_count)
-        # Finding sentiment of the tweet
-        sentiment = (status.text).sentiment.polarity
-        sentiment_stream1.append(status.text, sentiment)
-        if sentiment == 0:
-            nuetral_stream1.append(status.text)
-        elif sentiment > 0:
-            positive_stream1.append(status.text)
-        else:
-            negative_stream1.append(status.text)
-        # Updating data from kmeans clustering
-        kmeans_data_stream1.append((status.text, status.created_at, status.source, status.lang))
-
-        df_tweet_1.append({'Timestamp': status.created_at, 'Tweet': status.text}, ignore_index=True)
-        # if status.coordinates is not None:
-        #     xc = status.coordinates['coordinates'][0]
-        #     yc = status.coordinates['coordinates'][1]
-        #     print(xc, yc)
+        nlp_1(status)
+        insert_time_series_data_1(status.created_at, status.text)
 
     def on_error(self, status_code):
         if status_code == 420:
@@ -131,45 +176,7 @@ class listener_1(tweepy.StreamListener):
 class listener_2(tweepy.StreamListener):
 
     def on_status(self, status):
-        # Using global variables
-        global token_count_stream2
-        global tf_stream2
-        global tf_normalized_stream2
-        global top_tf_normalized_stream2
-        global top_count
-        global sentiment_stream2
-        global positive_stream2
-        global negative_stream2
-        global nuetral_stream2
-        global all_tweets_stream2
-        global kmeans_data_stream2
-        global total_tweet_count
-        global tweet_count_stream2
-
-        # Update tweet counts
-        total_tweet_count +=1
-        tweet_count_stream2 += 1
-        all_tweets_stream2.append(status.text)
-        # Process tweets and update term frequencies
-        list_of_tokens = process_tweet(status.text)
-        token_count_stream2 = token_count_stream2 + len(list_of_tokens)
-        for token in list_of_tokens:
-            tf_stream2[token] += 1
-        for token, count in tf_stream2.items():
-            tf_normalized_stream2[token] = float(count/token_count_stream2)*100
-        # Update the top k most frequent words
-        top_tf_normalized_stream2 = Counter(tf_normalized_stream2).most_common(top_count)
-        # Finding sentiment of the tweet
-        sentiment = TextBlob(status.text).sentiment.polarity
-        sentiment_stream2.append((status.text, sentiment))
-        if sentiment == 0:
-            nuetral_stream2.append(status.text)
-        elif sentiment > 0:
-            positive_stream2.append(status.text)
-        else:
-            negative_stream2.append(status.text)
-        # Updating data from kmeans clustering
-        kmeans_data_stream2.append((status.text, status.created_at, status.source, status.lang))
+        nlp_2(status)
 
     def on_error(self, status_code):
         if status_code == 420:
@@ -178,9 +185,23 @@ class listener_2(tweepy.StreamListener):
             return False
 
 def update_visualization():
-    print(df_tweet_1)
-    #plot()
-    Timer(2, update_visualization).start()
+    global df_tweet_1
+    now = datetime.utcnow()
+    min_time = now - timedelta(seconds=500)
+    df_tweet_1.drop(df_tweet_1[df_tweet_1.Timestamp < min_time].index, inplace=True)
+    df_tweet_1['rounded_time'] = df_tweet_1['Timestamp'].apply(lambda x: x - timedelta(seconds=x.second - round(x.second, -1)))
+
+    tweet_rate = df_tweet_1.groupby(['rounded_time']).size()
+    tweet_rate = tweet_rate.to_frame().reset_index()
+    tweet_rate = tweet_rate.rename(columns={0: 'count'})
+
+    ds1.data['x'] = tweet_rate['rounded_time'].tolist()
+    ds1.data['y'] = tweet_rate['count'].tolist()
+
+    print(tweet_rate)
+    #plot(tweet_rate)
+    ds1.trigger('data', ds1.data, ds1.data)
+    #Timer(2, update_visualization).start()
 
 
 def get_twitter_api_handle(consumer_key, consumer_secret, access_token, access_token_secret) :
@@ -199,15 +220,31 @@ def create_twitter_stream(api, topic, callback):
 def plot():
     x = 1
 
-api_2 = get_twitter_api_handle(consumer_key_2, consumer_secret_2, access_token_2, access_token_secret_2)
 
-topic = ['football']
-create_twitter_stream(api_2, topic, listener_2())
+columns = ['Timestamp', 'Tweet', 'rounded_time']
+df_tweet_1 = pd.DataFrame(columns=columns)
+df_tweet_1 = df_tweet_1.fillna(0)
 
-# api_1 = get_twitter_api_handle(consumer_key_1, consumer_secret_1, access_token_1, access_token_secret_1)
-# topic = ['baseball']
-# create_twitter_stream(api_1, topic, listener_1())
+doc = curdoc()
+tweet_rate_plot = figure(plot_width=400, plot_height=400)
+line1 = tweet_rate_plot.line(x = [], y = [], line_width=2)
+ds1 = line1.data_source
+
+layout = column(tweet_rate_plot)
+doc.add_root(layout)
+
+
+# api_2 = get_twitter_api_handle(consumer_key_2, consumer_secret_2, access_token_2, access_token_secret_2)
+#
+# topic = ['football']
+# create_twitter_stream(api_2, topic, listener_2())
+
+api_1 = get_twitter_api_handle(consumer_key_1, consumer_secret_1, access_token_1, access_token_secret_1)
+topic = ['north korea']
+create_twitter_stream(api_1, topic, listener_1())
 
 
 # duration is in seconds
 # Timer(2, update_visualization).start()
+
+doc.add_periodic_callback(update_visualization, 10000)
