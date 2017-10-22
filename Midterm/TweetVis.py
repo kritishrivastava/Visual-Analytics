@@ -83,6 +83,8 @@ total_tweet_count = 0
 tweet_count_stream1= 0
 tweet_count_stream2 = 0
 
+doc = curdoc()
+
 def insert_time_series_data_1(ts, msg):
     global df_tweet_1
     df_tweet_1.loc[len(df_tweet_1)] = [ts, msg, np.NaN]
@@ -341,6 +343,10 @@ def update_visualization():
 
 
 
+def create_bar_plot():
+    # Bar chart for tweets per device
+    device_tweet_plot = figure(plot_width=600, plot_height=400, title="Number of Tweets per device type")
+
 def get_twitter_api_handle(consumer_key, consumer_secret, access_token, access_token_secret) :
     auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
     auth.set_access_token(access_token, access_token_secret)
@@ -367,20 +373,21 @@ create_twitter_stream(api_1, topic, listener_1())
 
 ######## Creating Visualizations ###############
 
-doc = curdoc()
-
 # Heading
 heading = PreText(text="""CLUSTERING ALGORITHM ON WHOLESALE CUSTOMERS DATA""", height=25, width=500)
 
+#------------------------------------------------------------------------------------------------------------------
 # Catergory text search
 search_1 = PreText(text="""\n\nCategory 1 """, height=50, width=200)
 search_2 = PreText(text="""\n\nCategory 2 """, height=50, width=200)
 button_go = Button(label="Evaluate", width=100, button_type="success")
 
+#------------------------------------------------------------------------------------------------------------------
 # Tweets display
 text = "Real Time Tweets-- \n"
 current_tweets_plot = PreText(text=text, width=500, height=900)
 
+#------------------------------------------------------------------------------------------------------------------
 # Line chart for tweet rate
 columns = ['Timestamp', 'Tweet', 'rounded_time']
 
@@ -390,23 +397,25 @@ df_tweet_1 = df_tweet_1.fillna(0)
 df_tweet_2 = pd.DataFrame(columns=columns)
 df_tweet_2 = df_tweet_2.fillna(0)
 
-tweet_rate_plot = figure(plot_width=800, plot_height=300)
+tweet_rate_plot = figure(title='Tweet Rate', plot_width=800, plot_height=300)
 
-line1 = tweet_rate_plot.line(x = [], y = [], line_width=2)
-# tweet_rate_plot.title = "Comparing tweet rate"
+line1 = tweet_rate_plot.line(x=[], y=[], line_width=2)
 line_datasource = line1.data_source
 
+#------------------------------------------------------------------------------------------------------------------
 # Pie chart for tweet division per category
 colors = [color_stream_1, color_stream_2]
-tweet_division_plot = figure(x_range=(-1,1), y_range=(-1,1),plot_width=300, plot_height=300)
+tweet_division_plot = figure(title='Total tweets for each search term', x_range=(-1, 1), y_range=(-1, 1),
+                             plot_width=300, plot_height=300)
 pie = tweet_division_plot.wedge(x=0, y=0, radius=1, start_angle=[], end_angle=[], color=colors)
 pie_datasource = pie.data_source
 tweet_division_plot.axis.visible = False
 
-
+#------------------------------------------------------------------------------------------------------------------
 # Bar chart for tweets per device
 device_tweet_plot = figure(plot_width=600, plot_height=400, title="Number of Tweets per device type")
 
+#------------------------------------------------------------------------------------------------------------------
 # Word clouds for most frequent words
 word_cloud_stream_1 = figure(x_range=(-20, 120), y_range=(-20, 120), plot_width=500, plot_height=500)
 word_cloud_stream_2 = figure(x_range=(-20, 120), y_range=(-20, 120), plot_width=500, plot_height=500)
@@ -467,37 +476,3 @@ layout = layout([heading], [wgt_search], [l1, current_tweets_plot])
 
 doc.add_root(layout)
 doc.add_periodic_callback(update_visualization, 10000)
-
-
-
-# x = np.linspace(-50, 150, 100)
-# y = x
-#
-# print(top_tf_normalized_stream1)
-
-
-
-# x_rand = random.sample(range(1, 100), 5)
-# y_rand = random.sample(range(1, 100), 5)
-#
-# df = pd.DataFrame()
-#
-# df['word'] = ['a', 'b', 'c', 'd', 'e']
-# df['x'] = x_rand
-# df['y'] = y_rand
-#
-# print(x_rand, y_rand)
-# source = ColumnDataSource(df)
-#
-# print(df)
-#
-# word_cloud_plot.text(x='x', y='y', text='word', source=source)
-#
-# layout.children[2] = word_cloud_plot
-
-# duration is in seconds
-#Timer(2, update_visualization).start()
-
-
-
-#test = [('north', 6.481481481481481), ('korea', 6.172839506172839), ('rt', 4.320987654320987), ('open', 1.8518518518518516), ('letter', 1.8518518518518516), ('parliaments', 1.8518518518518516), ('number', 1.8518518518518516), ('countries', 1.8518518518518516), ('declares', 1.8518518518518516), ('power', 1.8518518518518516), ('…', 1.8518518518518516), ('``', 1.5432098765432098), ('full-fledged', 1.5432098765432098), ('nuclear', 1.5432098765432098), ("''", 1.5432098765432098), ('trump', 1.2345679012345678), ('cnni', 1.2345679012345678), ('’', 1.2345679012345678), ('window', 0.9259259259259258), ('diplomacy', 0.9259259259259258)]
