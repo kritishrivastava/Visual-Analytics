@@ -56,6 +56,9 @@ access_token_secret_1="crEaGnf626IpikzjxpwXopKvwzOqiYU6KRASF9phg4gaP"
 words_stream_1 = []
 words_stream_2 = []
 
+color_stream_1 = "Blue"
+color_stream_2 = "Orange"
+
 # Global variable declaration
 tf_stream1 = defaultdict(int)
 tf_stream2 = defaultdict(int)
@@ -197,13 +200,14 @@ class listener_2(tweepy.StreamListener):
 
 def plot_tweet_rate(tweet_rate, tweet_rate_2):
     #tweet_rate_plot = figure(plot_width=800, plot_height=300)
-    tweet_rate_plot.line(x=tweet_rate['rounded_time'].tolist(), y=tweet_rate['count'].tolist(), line_width=2)
+    #tweet_rate_plot.line(x=tweet_rate['rounded_time'].tolist(), y=tweet_rate['count'].tolist(), line_width=2)
     #layout.children[0] = tweet_rate_plot
 
-    tweet_rate_plot.line(x=tweet_rate_2['rounded_time'].tolist(), y=tweet_rate_2['count'].tolist(), line_width=2)
+    #tweet_rate_plot.line(x=tweet_rate_2['rounded_time'].tolist(), y=tweet_rate_2['count'].tolist(), line_width=2)
     #layout.children[0] = tweet_rate_plot
-
-    # ds1.trigger('data', ds1.data, ds1.data)
+    line_datasource.data['x'] = tweet_rate['rounded_time'].tolist()
+    line_datasource.data['y'] = tweet_rate['count'].tolist()
+    line_datasource.trigger('data', line_datasource.data, line_datasource.data)
 
 def update_pie():
     # Updating Pie chart
@@ -366,18 +370,21 @@ current_tweets_plot = PreText(text='Current tweets will go here-- \n Tweet numer
 
 # Line chart for tweet rate
 columns = ['Timestamp', 'Tweet', 'rounded_time']
+
 df_tweet_1 = pd.DataFrame(columns=columns)
 df_tweet_1 = df_tweet_1.fillna(0)
-columns = ['Timestamp', 'Tweet', 'rounded_time']
+
 df_tweet_2 = pd.DataFrame(columns=columns)
 df_tweet_2 = df_tweet_2.fillna(0)
+
 tweet_rate_plot = figure(plot_width=800, plot_height=300)
+
 line1 = tweet_rate_plot.line(x = [], y = [], line_width=2)
 # tweet_rate_plot.title = "Comparing tweet rate"
-ds1 = line1.data_source
+line_datasource = line1.data_source
 
 # Pie chart for tweet division per category
-colors = ["red", "green"]
+colors = [color_stream_1, color_stream_2]
 tweet_division_plot = figure(x_range=(-1,1), y_range=(-1,1),plot_width=300, plot_height=300)
 pie = tweet_division_plot.wedge(x=0, y=0, radius=1, start_angle=[], end_angle=[], color=colors)
 pie_datasource = pie.data_source
