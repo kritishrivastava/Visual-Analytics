@@ -21,7 +21,7 @@ from bokeh.plotting import *
 from bokeh.models import ColumnDataSource, HoverTool, Dropdown, PreText, Slider, Button, Label, Select
 from bokeh.models.glyphs import Text
 from bokeh.plotting import figure
-from bokeh.layouts import widgetbox, gridplot, column, layout
+from bokeh.layouts import widgetbox, gridplot, column, layout, row
 
 from sklearn.feature_extraction.text import *
 from sklearn.decomposition import TruncatedSVD
@@ -201,7 +201,7 @@ def plot_tweet_rate(tweet_rate, tweet_rate_2):
     #layout.children[0] = tweet_rate_plot
 
     tweet_rate_plot.line(x=tweet_rate_2['rounded_time'].tolist(), y=tweet_rate_2['count'].tolist(), line_width=2)
-    layout.children[0] = tweet_rate_plot
+    #layout.children[0] = tweet_rate_plot
 
     # ds1.trigger('data', ds1.data, ds1.data)
 
@@ -234,7 +234,7 @@ def plot_word_cloud():
     source = ColumnDataSource(df)
     word_cloud_stream_1.text(x='x', y='y', text='word', text_font_size = 'font_size', source=source)
     #word_cloud_plot.add_glyph(source, glyph)
-    layout.children[2] = word_cloud_stream_1
+    #layout.children[2] = word_cloud_stream_1
 
 def update_scatter_plot():
     global clustered_source_stream1, sentiment_colors
@@ -433,12 +433,18 @@ kmeans_stream2_plot.axis.visible = False
 kmeans_stream2_plot.xgrid.grid_line_color = None
 kmeans_stream2_plot.ygrid.grid_line_color = None
 
-# Rendering all plots
-layout = layout([heading], [search_1, search_2, button_go],
-                [[[tweet_rate_plot], [device_tweet_plot, tweet_division_plot ],
-                [word_cloud_stream_1, word_cloud_stream_2],
-                [sentiment_stream1_plot,sentiment_stream2_plot],
-                [kmeans_stream1_plot,kmeans_stream2_plot]],[current_tweets_plot]])
+
+#layout for the visualization
+wgt_search = row(widgetbox(search_1), widgetbox(search_2), widgetbox(button_go))
+
+l1 = layout([[tweet_rate_plot], [device_tweet_plot, tweet_division_plot],
+                 [word_cloud_stream_1, word_cloud_stream_2],
+                 [sentiment_stream1_plot,sentiment_stream2_plot],
+                 [kmeans_stream1_plot,kmeans_stream2_plot]])
+
+l2 = layout([heading], [wgt_search], [l1, current_tweets_plot])
+layout = layout([heading], [wgt_search], [l1, current_tweets_plot])
+
 doc.add_root(layout)
 doc.add_periodic_callback(update_visualization, 10000)
 
