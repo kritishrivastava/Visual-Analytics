@@ -223,6 +223,18 @@ def update_pie():
     pie_datasource.data['end_angle'] = ends
     pie_datasource.trigger('data', pie_datasource.data, pie_datasource.data)
 
+def update_current_tweets():
+    # Update the current tweets box
+    text = "LATEST TWEETS\n "
+    for i in range(len(all_tweets_stream1)-1,0,-1):
+        text = text + all_tweets_stream1[i] + "\n\n"
+    for i in range(len(all_tweets_stream2)-1,0,-1):
+        text = text + all_tweets_stream2[i] + "\n\n"
+    # for tweet in all_tweets_stream1:
+    #     text = text + tweet + "\n"
+    # for tweet in all_tweets_stream2:
+    #     text = text + tweet + "\n"
+    current_tweets_plot.text = text
 
 def plot_word_cloud():
     #print("Test word cloud")
@@ -325,7 +337,7 @@ def update_visualization():
     update_pie()
     plot_word_cloud()
     update_scatter_plot()
-
+    update_current_tweets()
 
 
 
@@ -366,7 +378,8 @@ search_2 = PreText(text="""\n\nCategory 2 """, height=50, width=200)
 button_go = Button(label="Evaluate", width=100, button_type="success")
 
 # Tweets display
-current_tweets_plot = PreText(text='Current tweets will go here-- \n Tweet numer 1\n Tweet numer 2\n', width=500, height=900)
+text = "Real Time Tweets-- \n"
+current_tweets_plot = PreText(text=text, width=500, height=900)
 
 # Line chart for tweet rate
 columns = ['Timestamp', 'Tweet', 'rounded_time']
@@ -449,7 +462,7 @@ l1 = layout([[tweet_rate_plot], [device_tweet_plot, tweet_division_plot],
                  [sentiment_stream1_plot,sentiment_stream2_plot],
                  [kmeans_stream1_plot,kmeans_stream2_plot]])
 
-l2 = layout([heading], [wgt_search], [l1, current_tweets_plot])
+#l2 = layout([heading], [wgt_search], [l1, current_tweets_plot])
 layout = layout([heading], [wgt_search], [l1, current_tweets_plot])
 
 doc.add_root(layout)
