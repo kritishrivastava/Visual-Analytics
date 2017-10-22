@@ -1,22 +1,30 @@
-import tweepy
-from bokeh.plotting import *
 from datetime import datetime, timedelta
-from bokeh.plotting import figure
-from bokeh.layouts import widgetbox, gridplot, column
-
-from nltk import word_tokenize
-from nltk.corpus import stopwords
 import string
 from threading import Timer
 import time
 from collections import defaultdict
 from collections import Counter
-import preprocessor as p
-from textblob import TextBlob
-from sklearn.cluster import MiniBatchKMeans
+import random
+import tweepy
+
 import pandas as pd
 import numpy as np
 from pandas import Series, DataFrame, Panel
+
+from nltk import word_tokenize
+from nltk.corpus import stopwords
+import preprocessor as p
+from textblob import TextBlob
+
+from bokeh.plotting import *
+from bokeh.models import ColumnDataSource, HoverTool, Dropdown, PreText, Slider, Button, Label, Select
+from bokeh.models.glyphs import Text
+from bokeh.plotting import figure
+from bokeh.layouts import widgetbox, gridplot, column, layout
+
+from sklearn.feature_extraction.text import *
+from sklearn.decomposition import TruncatedSVD
+from sklearn.cluster import MiniBatchKMeans
 
 # Setting options for tweet preprocessing - remove URL and emoji
 p.set_options(p.OPT.URL, p.OPT.EMOJI)
@@ -34,6 +42,13 @@ consumer_secret_2="7lrYE7uiMnMyjs0gbGOIXwz8c0fX7Otg8I5aOKuombb7H0TV4c"
 
 access_token_2="2273168329-px91XwVztXVPjrDGvvyKuQLCyOFi8Zd19NzakMP"
 access_token_secret_2="tN1RKG0v8jtaIfvoXOGeUry7v0IcPRPLSK5x3qf6UQu4C"
+
+#Kriti's account
+consumer_key_1="VcJ7LgeONhabS1o0b6CUfnZY2"
+consumer_secret_1="wvkRYBPU9bem0EoJR04uvfnCWIFNlXusoGLca6b4vCCJWuWxsb"
+
+access_token_1="921914312058384384-Uhqe3dePUkRuzjVKvAVPpoNlPclJMnh"
+access_token_secret_1="crEaGnf626IpikzjxpwXopKvwzOqiYU6KRASF9phg4gaP"
 
 words_stream_1 = []
 words_stream_2 = []
@@ -58,8 +73,6 @@ negative_stream2 = []
 nuetral_stream2 = []
 all_tweets_stream1 = []
 all_tweets_stream2 = []
-kmeans_data_stream1 = []
-kmeans_data_stream2 = []
 total_tweet_count = 0
 tweet_count_stream1= 0
 tweet_count_stream2 = 0
@@ -75,8 +88,13 @@ def process_tweet(tweet):
     return words
 
 def clustering(data):
-    mbk = MiniBatchKMeans(init='k-means++', n_clusters=3, batch_size=50, n_init=3, max_no_improvement=10, verbose=0).fit(data)
-    return mbk.labels_
+    tfidf_vectorizer = TfidfVectorizer()
+    X_train_tfidf = tfidf_vectorizer.fit_transform(data)
+    reducedDimensions_X = TruncatedSVD(n_components=2).fit_transform(X_train_tfidf)
+    x = [x[0] for x in reducedDimensions_X]
+    y = [x[1] for x in reducedDimensions_X]
+    mbk = MiniBatchKMeans(init='k-means++', n_clusters=3, batch_size=50, n_init=3, max_no_improvement=10, verbose=0).fit(reducedDimensions_X)
+    return x, y,  mbk.labels_
 
 
 def nlp_1(status):
@@ -90,7 +108,6 @@ def nlp_1(status):
     global negative_stream1
     global nuetral_stream1
     global all_tweets_stream1
-    global kmeans_data_stream1
     global tweet_count_stream1
 
     # Update tweet count
@@ -107,15 +124,13 @@ def nlp_1(status):
     top_tf_normalized_stream1 = Counter(tf_normalized_stream1).most_common(top_count)
     # Finding sentiment of the tweet
     sentiment = TextBlob(status.text).sentiment.polarity
-    sentiment_stream1.append((status.text, sentiment))
-    if sentiment == 0:
-        nuetral_stream1.append(status.text)
-    elif sentiment > 0:
-        positive_stream1.append(status.text)
-    else:
-        negative_stream1.append(status.text)
-    # Updating data from kmeans clustering
-    kmeans_data_stream1.append((status.text, status.created_at, status.source, status.lang))
+    sentiment_stream1.append(sentiment)
+    # if sentiment == 0:
+    #     nuetral_stream1.append(status.text)
+    # elif sentiment > 0:
+    #     positive_stream1.append(status.text)
+    # else:
+    #     negative_stream1.append(status.text)
 
 
 def nlp_2(status):
@@ -130,7 +145,6 @@ def nlp_2(status):
     global negative_stream2
     global nuetral_stream2
     global all_tweets_stream2
-    global kmeans_data_stream2
     global tweet_count_stream2
 
     # Update tweet counts
@@ -147,15 +161,13 @@ def nlp_2(status):
     top_tf_normalized_stream2 = Counter(tf_normalized_stream2).most_common(top_count)
     # Finding sentiment of the tweet
     sentiment = TextBlob(status.text).sentiment.polarity
-    sentiment_stream2.append((status.text, sentiment))
-    if sentiment == 0:
-        nuetral_stream2.append(status.text)
-    elif sentiment > 0:
-        positive_stream2.append(status.text)
-    else:
-        negative_stream2.append(status.text)
-    # Updating data from kmeans clustering
-    kmeans_data_stream2.append((status.text, status.created_at, status.source, status.lang))
+    sentiment_stream2.append(sentiment)
+    # if sentiment == 0:
+    #     nuetral_stream2.append(status.text)
+    # elif sentiment > 0:
+    #     positive_stream2.append(status.text)
+    # else:
+    #     negative_stream2.append(status.text)
 
 class listener_1(tweepy.StreamListener):
 
@@ -180,12 +192,124 @@ class listener_2(tweepy.StreamListener):
             print("Hit rate limit")
             return False
 
+def plot_tweet_rate(tweet_rate, tweet_rate_2):
+    #tweet_rate_plot = figure(plot_width=800, plot_height=300)
+    tweet_rate_plot.line(x=tweet_rate['rounded_time'].tolist(), y=tweet_rate['count'].tolist(), line_width=2)
+    #layout.children[0] = tweet_rate_plot
+
+    tweet_rate_plot.line(x=tweet_rate_2['rounded_time'].tolist(), y=tweet_rate_2['count'].tolist(), line_width=2)
+    layout.children[0] = tweet_rate_plot
+
+    # ds1.trigger('data', ds1.data, ds1.data)
+
+def plot_pie():
+    now = datetime.utcnow()
+    start_ang = float(now.second / 60)
+    # start_ang = float(token_count_stream1 / (token_count_stream2 + token_count_stream1))
+    # end_ang = float(tweet_count_stream2 / (token_count_stream2 + token_count_stream1));
+
+    starts = [0, start_ang]
+    ends = [start_ang, 1]
+
+    starts = [i * 2 * 3.14 for i in starts]
+    ends = [i * 2 * 3.14 for i in ends]
+
+    #tweet_division_plot = figure(x_range=(-1, 1), y_range=(-1, 1), plot_width=200, plot_height=200)
+    tweet_division_plot.wedge(x=0, y=0, radius=1, start_angle=starts, end_angle=ends, color=colors)
+    layout.children[1] = tweet_division_plot
+
+def plot_word_cloud():
+
+    #print("Test word cloud")
+    #print(top_tf_normalized_stream1)
+
+    df = pd.DataFrame(top_tf_normalized_stream1, columns=['word', 'weight'])
+    df['font_size'] = df['weight'].apply(
+        lambda x: "{0:.2f}".format(x) + 'pt')
+    #print(df.dtypes.index)
+
+    #df = pd.DataFrame([top_tf_normalized_stream1], columns=top_tf_normalized_stream1.keys())
+
+    x_rand = random.sample(range(1, 100), top_count)
+    y_rand = random.sample(range(1, 100), top_count)
+
+    df['x'] = x_rand
+    df['y'] = y_rand
+
+    source = ColumnDataSource(df)
+
+    #print(df)
+
+    word_cloud_stream_1.text(x='x', y='y', text='word', text_font_size = 'font_size', source=source)
+    #word_cloud_plot.add_glyph(source, glyph)
+
+    layout.children[2] = word_cloud_stream_1
+
+def update_scatter_plot():
+    # Updating Scatter plots - sentiment and kmeans stream 1
+    x, y, color_labels = clustering(all_tweets_stream1)
+    sentiment_scatter1_datasource.data['x'] = x
+    sentiment_scatter1_datasource.data['y'] = y
+    kmeans_scatter1_datasource.data['x'] = x
+    kmeans_scatter1_datasource.data['y'] = y
+    colors = []
+    for label in color_labels:
+        if label == 0:
+            colors.append("Yellow")
+        elif label == 1:
+            colors.append("Green")
+        else:
+            colors.append("Red")
+    kmeans_scatter1_datasource.data['fill_color'] = colors
+    colors_sentiment = []
+    for sentiment in sentiment_stream1:
+        if sentiment == 0:
+            colors_sentiment.append("Yellow")
+        elif sentiment > 0:
+            colors_sentiment.append("Green")
+        else:
+            colors_sentiment.append("Red")
+    sentiment_scatter1_datasource.data['fill_color'] = colors_sentiment
+    # Updating Scatter plots - sentiment and kmeans stream 2
+    x2, y2, color_labels2 = clustering(all_tweets_stream2)
+    sentiment_scatter2_datasource.data['x'] = x2
+    sentiment_scatter2_datasource.data['y'] = y2
+    colors2 = []
+    for label in color_labels2:
+        if label == 0:
+            colors2.append("Yellow")
+        elif label == 1:
+            colors2.append("Green")
+        else:
+            colors2.append("Red")
+    kmeans_scatter2_datasource.data['fill_color'] = colors2
+    colors_sentiment2 = []
+    for sentiment in sentiment_stream2:
+        if sentiment == 0:
+            colors_sentiment2.append("Yellow")
+        elif sentiment > 0:
+            colors_sentiment2.append("Green")
+        else:
+            colors_sentiment2.append("Red")
+    sentiment_scatter2_datasource.data['fill_color'] = colors_sentiment2
+
+    sentiment_scatter1_datasource.trigger('data', sentiment_scatter1_datasource.data,
+                                          sentiment_scatter1_datasource.data)
+    sentiment_scatter2_datasource.trigger('data', sentiment_scatter2_datasource.data,
+                                          sentiment_scatter2_datasource.data)
+
+    kmeans_scatter1_datasource.trigger('data', kmeans_scatter1_datasource.data, kmeans_scatter1_datasource.data)
+    kmeans_scatter2_datasource.trigger('data', kmeans_scatter2_datasource.data, kmeans_scatter2_datasource.data)
+
 # Function to update all the visualizations after time step
 def update_visualization():
-    global df_tweet_1
+    global df_tweet_1, pie_datasource
     ## Updating Line charts
+
+
     now = datetime.utcnow()
     min_time = now - timedelta(seconds=500)
+
     df_tweet_1.drop(df_tweet_1[df_tweet_1.Timestamp < min_time].index, inplace=True)
     df_tweet_1['rounded_time'] = df_tweet_1['Timestamp'].apply(lambda x: x - timedelta(seconds=x.second - round(x.second, -1)))
 
@@ -193,26 +317,21 @@ def update_visualization():
     tweet_rate = tweet_rate.to_frame().reset_index()
     tweet_rate = tweet_rate.rename(columns={0: 'count'})
 
-    ds1.data['x'] = tweet_rate['rounded_time'].tolist()
-    ds1.data['y'] = tweet_rate['count'].tolist()
+    df_tweet_2.drop(df_tweet_2[df_tweet_2.Timestamp < min_time].index, inplace=True)
+    df_tweet_2['rounded_time'] = df_tweet_2['Timestamp'].apply(
+        lambda x: x - timedelta(seconds=x.second - round(x.second, -1)))
 
-    # Updating Pie chart
-    percents = [float(token_count_stream1 / (token_count_stream2 + token_count_stream1)) * 100,
-                float(tweet_count_stream2 / (token_count_stream2 + token_count_stream1)) * 100]
-    # percents = [0,0.15,0.4,0.7,1.0]
-    starts = [0, 0.2]
-    ends = [0.2, 1]
-    print(starts)
-    print(ends)
-    print(percents)
-    pie_datasource['start_angle'] = starts
-    pie_datasource['end_angle'] = ends
+    tweet_rate_2 = df_tweet_2.groupby(['rounded_time']).size()
+    tweet_rate_2 = tweet_rate_2.to_frame().reset_index()
+    tweet_rate_2 = tweet_rate_2.rename(columns={0: 'count'})
+
+    plot_tweet_rate(tweet_rate, tweet_rate_2)
+    plot_pie()
+    plot_word_cloud()
+
+    update_scatter_plot()
 
 
-    # Trigger all plot updates
-    ds1.trigger('data', ds1.data, ds1.data)
-    # pie_datasource.trigger('data', pie_datasource.data, pie_datasource.data)
-    # pie_datasource.trigger('change')
 
 
 def get_twitter_api_handle(consumer_key, consumer_secret, access_token, access_token_secret) :
@@ -227,36 +346,63 @@ def create_twitter_stream(api, topic, callback):
     myStream = tweepy.Stream(auth=api.auth, listener=callback)
     myStream.filter(track=topic, async=True)
 
-
-def plot():
-    x = 1
-
 doc = curdoc()
 
 # Line chart for tweet rate
 columns = ['Timestamp', 'Tweet', 'rounded_time']
 df_tweet_1 = pd.DataFrame(columns=columns)
 df_tweet_1 = df_tweet_1.fillna(0)
+
+
+heading = PreText(text="""CLUSTERING ALGORITHM ON WHOLESALE CUSTOMERS DATA""", height=25, width=500)
+
 tweet_rate_plot = figure(plot_width=800, plot_height=300)
 line1 = tweet_rate_plot.line(x = [], y = [], line_width=2)
 ds1 = line1.data_source
 
+search_1 = PreText(text="""\n\nK-Means """, height=50, width=200)
+search_2 = PreText(text="""\n\nK-Means """, height=50, width=200)
+button_go = Button(label="Evaluate", width=100, button_type="success")
 
-# Pie chart for tweet category percentage
-# percents = [float(token_count_stream1/total_tweet_count)*100,float(tweet_count_stream2/total_tweet_count)*100]
-# starts = [p*2*np.pi for p in percents[:-1]]
-# ends = [p*2*np.pi for p in percents[1:]]
-percents = [0,0.7,1.0]
-starts = [0, 0.7]
-ends = [0.7, 1]
-colors = ["red", "green", "blue", "orange", "yellow"]
+colors = ["red", "green"]
 tweet_division_plot = figure(x_range=(-1,1), y_range=(-1,1),plot_width=200, plot_height=200)
-pie = tweet_division_plot.wedge(x=0, y=0, radius=1, start_angle=starts, end_angle=ends, color=colors)
-pie_datasource = pie.data_source
+# pie = tweet_division_plot.wedge(x=0, y=0, radius=1, start_angle=starts, end_angle=ends, color=colors)
+# pie_datasource = pie.data_source
 
+device_tweet_plot = figure(plot_width=1500, plot_height=400, title="abc ")
+
+word_cloud_stream_1 = figure(x_range=(-20, 120), y_range=(-20, 120), plot_width=500, plot_height=500)
+word_cloud_stream_2 = figure(x_range=(-20, 120), y_range=(-20, 120), plot_width=500, plot_height=500)
+
+# Scatter plot for clustering using sentiment - Category 1
+scatterplot_width = 400
+sentiment_stream1_plot = figure(plot_width=scatterplot_width, plot_height=scatterplot_width)
+sentiment_scatter1 = sentiment_stream1_plot.circle(x=[], y=[], size=5, fill_color = [] )
+sentiment_scatter1_datasource = sentiment_scatter1.data_source
+
+# Scatter plot for clustering using sentiment - Category 2
+sentiment_stream2_plot = figure(plot_width=scatterplot_width, plot_height=scatterplot_width)
+sentiment_scatter2 = sentiment_stream2_plot.circle(x=[], y=[], size=5, fill_color = [] )
+sentiment_scatter2_datasource = sentiment_scatter2.data_source
+
+# Scatter plot for clustering using kmeans - Category 1
+kmeans_stream1_plot = figure(plot_width=scatterplot_width, plot_height=scatterplot_width)
+kmeans_scatter1 = kmeans_stream1_plot.circle(x=[], y=[], size=5, fill_color = [] )
+kmeans_scatter1_datasource = kmeans_scatter1.data_source
+
+# Scatter plot for clustering using kmeans - Category 2
+kmeans_stream2_plot = figure(plot_width=scatterplot_width, plot_height=scatterplot_width)
+kmeans_scatter2 = kmeans_stream2_plot.circle(x=[], y=[], size=5, fill_color = [] )
+kmeans_scatter2_datasource = kmeans_scatter2.data_source
 
 # Rendering all plots
-layout = column(tweet_rate_plot, tweet_division_plot)
+#layout = column(tweet_rate_plot, tweet_division_plot, word_cloud_plot)
+
+
+layout = layout([heading], [search_1, search_2, button_go], [tweet_rate_plot], [device_tweet_plot, tweet_division_plot ],
+           [word_cloud_stream_1, word_cloud_stream_2],[sentiment_stream1_plot,sentiment_stream2_plot],
+           [kmeans_stream1_plot,kmeans_stream2_plot])
+
 doc.add_root(layout)
 
 
@@ -269,8 +415,35 @@ api_1 = get_twitter_api_handle(consumer_key_1, consumer_secret_1, access_token_1
 topic = ['north korea']
 create_twitter_stream(api_1, topic, listener_1())
 
+# x = np.linspace(-50, 150, 100)
+# y = x
+#
+# print(top_tf_normalized_stream1)
+
+
+
+# x_rand = random.sample(range(1, 100), 5)
+# y_rand = random.sample(range(1, 100), 5)
+#
+# df = pd.DataFrame()
+#
+# df['word'] = ['a', 'b', 'c', 'd', 'e']
+# df['x'] = x_rand
+# df['y'] = y_rand
+#
+# print(x_rand, y_rand)
+# source = ColumnDataSource(df)
+#
+# print(df)
+#
+# word_cloud_plot.text(x='x', y='y', text='word', source=source)
+#
+# layout.children[2] = word_cloud_plot
 
 # duration is in seconds
-# Timer(2, update_visualization).start()
+#Timer(2, update_visualization).start()
 
 doc.add_periodic_callback(update_visualization, 10000)
+
+#test = [('north', 6.481481481481481), ('korea', 6.172839506172839), ('rt', 4.320987654320987), ('open', 1.8518518518518516), ('letter', 1.8518518518518516), ('parliaments', 1.8518518518518516), ('number', 1.8518518518518516), ('countries', 1.8518518518518516), ('declares', 1.8518518518518516), ('power', 1.8518518518518516), ('…', 1.8518518518518516), ('``', 1.5432098765432098), ('full-fledged', 1.5432098765432098), ('nuclear', 1.5432098765432098), ("''", 1.5432098765432098), ('trump', 1.2345679012345678), ('cnni', 1.2345679012345678), ('’', 1.2345679012345678), ('window', 0.9259259259259258), ('diplomacy', 0.9259259259259258)]
+
