@@ -18,10 +18,13 @@ import preprocessor as p
 from textblob import TextBlob
 
 from bokeh.plotting import *
-from bokeh.models import ColumnDataSource, HoverTool, Dropdown, PreText, Slider, Button, Label, Select
+from bokeh.models import ColumnDataSource, HoverTool, Dropdown, PreText, Slider, Button, Label, Select,  FactorRange
 from bokeh.models.glyphs import Text
 from bokeh.plotting import figure
 from bokeh.layouts import widgetbox, gridplot, column, layout, row
+#from bokeh.charts import Bar
+from bokeh.transform import factor_cmap
+from bokeh.palettes import inferno
 
 from sklearn.feature_extraction.text import *
 from sklearn.decomposition import TruncatedSVD
@@ -47,17 +50,19 @@ access_token_2="2273168329-px91XwVztXVPjrDGvvyKuQLCyOFi8Zd19NzakMP"
 access_token_secret_2="tN1RKG0v8jtaIfvoXOGeUry7v0IcPRPLSK5x3qf6UQu4C"
 
 #Kriti's account
-consumer_key_1="VcJ7LgeONhabS1o0b6CUfnZY2"
-consumer_secret_1="wvkRYBPU9bem0EoJR04uvfnCWIFNlXusoGLca6b4vCCJWuWxsb"
-
-access_token_1="921914312058384384-Uhqe3dePUkRuzjVKvAVPpoNlPclJMnh"
-access_token_secret_1="crEaGnf626IpikzjxpwXopKvwzOqiYU6KRASF9phg4gaP"
+# consumer_key_1="VcJ7LgeONhabS1o0b6CUfnZY2"
+# consumer_secret_1="wvkRYBPU9bem0EoJR04uvfnCWIFNlXusoGLca6b4vCCJWuWxsb"
+#
+# access_token_1="921914312058384384-Uhqe3dePUkRuzjVKvAVPpoNlPclJMnh"
+# access_token_secret_1="crEaGnf626IpikzjxpwXopKvwzOqiYU6KRASF9phg4gaP"
 
 words_stream_1 = []
 words_stream_2 = []
 
 color_stream_1 = "Blue"
 color_stream_2 = "Orange"
+
+devices = ['Twitter for Android', 'Twitter for iPhone', 'Twitter Web Client']
 
 # Global variable declaration
 tf_stream1 = defaultdict(int)
@@ -85,9 +90,34 @@ tweet_count_stream2 = 0
 
 doc = curdoc()
 
-def insert_time_series_data_1(ts, msg):
+source_stream1 = defaultdict(int)
+source_stream2 = defaultdict(int)
+
+def insert_time_series_data_1(ts, msg, src):
     global df_tweet_1
     df_tweet_1.loc[len(df_tweet_1)] = [ts, msg, np.NaN]
+
+    if src not in devices:
+        return
+
+    value = source_stream1.get(src)
+    if value is None:
+        source_stream1[src] = 1
+    else:
+        source_stream1[src] = value + 1
+
+def insert_time_series_data_2(ts, msg, src):
+    global df_tweet_2
+    df_tweet_2.loc[len(df_tweet_2)] = [ts, msg, np.NaN]
+
+    if src not in devices:
+        return
+
+    value = source_stream2.get(src)
+    if value is None:
+        source_stream2[src] = 1
+    else:
+        source_stream2[src] = value + 1
 
 def process_tweet(tweet):
     tweet = p.clean(tweet)
@@ -181,7 +211,7 @@ class listener_1(tweepy.StreamListener):
 
     def on_status(self, status):
         nlp_1(status)
-        insert_time_series_data_1(status.created_at, status.text)
+        insert_time_series_data_1(status.created_at, status.text, status.source)
 
     def on_error(self, status_code):
         if status_code == 420:
@@ -193,6 +223,7 @@ class listener_2(tweepy.StreamListener):
 
     def on_status(self, status):
         nlp_2(status)
+        insert_time_series_data_2(status.created_at, status.text, status.source)
 
     def on_error(self, status_code):
         if status_code == 420:
@@ -201,15 +232,13 @@ class listener_2(tweepy.StreamListener):
             return False
 
 def plot_tweet_rate(tweet_rate, tweet_rate_2):
-    #tweet_rate_plot = figure(plot_width=800, plot_height=300)
-    #tweet_rate_plot.line(x=tweet_rate['rounded_time'].tolist(), y=tweet_rate['count'].tolist(), line_width=2)
-    #layout.children[0] = tweet_rate_plot
+    line1_datasource.data['x'] = tweet_rate['rounded_time'].tolist()
+    line1_datasource.data['y'] = tweet_rate['count'].tolist()
+    line1_datasource.trigger('data', line1_datasource.data, line1_datasource.data)
 
-    #tweet_rate_plot.line(x=tweet_rate_2['rounded_time'].tolist(), y=tweet_rate_2['count'].tolist(), line_width=2)
-    #layout.children[0] = tweet_rate_plot
-    line_datasource.data['x'] = tweet_rate['rounded_time'].tolist()
-    line_datasource.data['y'] = tweet_rate['count'].tolist()
-    line_datasource.trigger('data', line_datasource.data, line_datasource.data)
+    line2_datasource.data['x'] = tweet_rate_2['rounded_time'].tolist()
+    line2_datasource.data['y'] = tweet_rate_2['count'].tolist()
+    line2_datasource.trigger('data', line2_datasource.data, line2_datasource.data)
 
 def update_pie():
     # Updating Pie chart
@@ -253,6 +282,53 @@ def plot_word_cloud():
     word_cloud_stream_1.text(x='x', y='y', text='word', text_font_size = 'font_size', source=source)
     #word_cloud_plot.add_glyph(source, glyph)
     #layout.children[2] = word_cloud_stream_1
+
+def plot_source_bar_group():
+    #streams = ['Stream 1', 'Stream 2']
+
+    df1 = pd.DataFrame([source_stream1])
+    df1['origin'] = 'Stream 1'
+
+    df2 = pd.DataFrame([source_stream2])
+    df2['origin'] = 'Stream 2'
+
+    df1.append(df2)
+
+    x1 = []
+    count = []
+
+    for key, value in source_stream1.items():
+        x1.append((key, 'Term 1'))
+        count.append(value)
+        #device.add(key)
+
+    for key, value in source_stream2.items():
+        x1.append((key, 'Term 2'))
+        count.append(value)
+        #device.add(key)
+
+    #print(x1)
+    #print(count)
+
+    new = dict(x=x, counts=count)
+    source_bar.stream(new)
+
+    #bar_datasource
+
+    # bar_datasource.data['x'] = x1
+    # bar_datasource.data['counts'] = count
+    # bar_datasource.trigger('data', bar_datasource.data, bar_datasource.data)
+
+    # source = ColumnDataSource(data=dict(x=x1, counts=count))
+    #
+    # device_tweet_plot = figure(x_range=FactorRange(*device), plot_width=600, plot_height=400,
+    #                            title="Number of Tweets per device type", toolbar_location=None, tools="")
+    #
+    # bar = device_tweet_plot.vbar(x='x', top='counts', width=0.9, source=source, line_color="white",
+    #                              fill_color=factor_cmap('x', palette=inferno(2), factors=streams))
+    # #bar_datasource = bar.data_source
+    #
+    # layout.children[2].children[0].children[1].children[0] = device_tweet_plot
 
 def update_scatter_plot():
     global clustered_source_stream1, sentiment_colors
@@ -320,7 +396,8 @@ def update_visualization():
     min_time = now - timedelta(seconds=500)
 
     df_tweet_1.drop(df_tweet_1[df_tweet_1.Timestamp < min_time].index, inplace=True)
-    df_tweet_1['rounded_time'] = df_tweet_1['Timestamp'].apply(lambda x: x - timedelta(seconds=x.second - round(x.second, -1)))
+    df_tweet_1['rounded_time'] = df_tweet_1['Timestamp'].\
+        apply(lambda x: x - timedelta(seconds=x.second - int(5 * round(float(x.second)/5))))
 
     tweet_rate = df_tweet_1.groupby(['rounded_time']).size()
     tweet_rate = tweet_rate.to_frame().reset_index()
@@ -340,8 +417,8 @@ def update_visualization():
     plot_word_cloud()
     update_scatter_plot()
     update_current_tweets()
-
-
+    plot_source_bar_group()
+    #print(source_stream1, source_stream2)
 
 def create_bar_plot():
     # Bar chart for tweets per device
@@ -397,10 +474,15 @@ df_tweet_1 = df_tweet_1.fillna(0)
 df_tweet_2 = pd.DataFrame(columns=columns)
 df_tweet_2 = df_tweet_2.fillna(0)
 
-tweet_rate_plot = figure(title='Tweet Rate', plot_width=800, plot_height=300)
+tweet_rate_plot = figure(title='Tweet Rate', x_axis_type="datetime", plot_width=500, plot_height=300,
+                         tools=[])
+tweet_rate_plot.toolbar.logo = None
 
-line1 = tweet_rate_plot.line(x=[], y=[], line_width=2)
-line_datasource = line1.data_source
+line1 = tweet_rate_plot.line(x=[], y=[], line_width=2, color=color_stream_1, legend='Stream 1')
+line1_datasource = line1.data_source
+
+line2 = tweet_rate_plot.line(x=[], y=[], line_width=2, color = color_stream_2, legend='Stream 2')
+line2_datasource = line2.data_source
 
 #------------------------------------------------------------------------------------------------------------------
 # Pie chart for tweet division per category
@@ -413,7 +495,24 @@ tweet_division_plot.axis.visible = False
 
 #------------------------------------------------------------------------------------------------------------------
 # Bar chart for tweets per device
-device_tweet_plot = figure(plot_width=600, plot_height=400, title="Number of Tweets per device type")
+
+'Twitter for Android', 'Twitter for iPhone', 'Twitter Web Client'
+
+x = [('Twitter for Android', 'Stream 1'), ('Twitter for Android', 'Stream 2'),
+     ('Twitter for iPhone', 'Stream 1'), ('Twitter for iPhone', 'Stream 2'),
+     ('Twitter Web Client', 'Stream 1'), ('Twitter Web Client', 'Stream 2')]
+counts = [0, 0, 0, 0, 0, 0]
+
+streams = ['Stream 1', 'Stream 2']
+
+source_bar = ColumnDataSource(data=dict(x=x, counts=counts))
+
+device_tweet_plot = figure(x_range=FactorRange(*x), plot_width=600, plot_height=400,
+                            title="Number of Tweets per device type", toolbar_location=None, tools="")
+
+bar = device_tweet_plot.vbar(x='x', top='counts', width=0.9, source=source_bar, line_color="white",
+                             fill_color=factor_cmap('x', palette=[color_stream_1, color_stream_2], factors=streams, start=1, end=2))
+
 
 #------------------------------------------------------------------------------------------------------------------
 # Word clouds for most frequent words
@@ -475,4 +574,4 @@ l1 = layout([[tweet_rate_plot], [device_tweet_plot, tweet_division_plot],
 layout = layout([heading], [wgt_search], [l1, current_tweets_plot])
 
 doc.add_root(layout)
-doc.add_periodic_callback(update_visualization, 10000)
+doc.add_periodic_callback(update_visualization, 5000)
