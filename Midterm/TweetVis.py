@@ -108,7 +108,7 @@ def insert_time_series_data_1(ts, msg, src):
 
 def insert_time_series_data_2(ts, msg, src):
     global df_tweet_2
-    df_tweet_2.loc[len(df_tweet_2)] = [ts, msg, np.NaN]
+    df_tweet_2.loc[len(df_tweet_2.index)] = [ts, msg, np.NaN]
 
     if src not in devices:
         return
@@ -268,20 +268,61 @@ def update_current_tweets():
     current_tweets_plot.text = text
 
 def plot_word_cloud():
-    #print("Test word cloud")
-    #print(top_tf_normalized_stream1)
-    df = pd.DataFrame(top_tf_normalized_stream1, columns=['word', 'weight'])
-    df['font_size'] = df['weight'].apply(lambda x: "{0:.2f}".format(x) + 'pt')
-    #print(df.dtypes.index)
-    #df = pd.DataFrame([top_tf_normalized_stream1], columns=top_tf_normalized_stream1.keys())
+
+    word = []
+    font_size = []
+
     x_rand = random.sample(range(1, 100), top_count)
     y_rand = random.sample(range(1, 100), top_count)
-    df['x'] = x_rand
-    df['y'] = y_rand
-    source = ColumnDataSource(df)
-    word_cloud_stream_1.text(x='x', y='y', text='word', text_font_size = 'font_size', source=source)
-    #word_cloud_plot.add_glyph(source, glyph)
-    #layout.children[2] = word_cloud_stream_1
+
+    dic = dict(top_tf_normalized_stream1)
+
+    #print(list(dic.values()))
+
+    #print(sum(list(dic.values())))
+    s = sum(list(dic.values()))
+
+    #print(s)
+
+    for key, value in dic.items():
+        word.append(key)
+        val = (float)(value/s) * 100
+        font_size.append("{0:.2f}".format(val) + 'pt')
+
+    source_cloud_1.data['x'] = x_rand
+    source_cloud_1.data['y'] = y_rand
+    source_cloud_1.data['font_size'] = font_size
+    source_cloud_1.data['word'] = word
+
+    print("first", font_size)
+
+    #word_cloud_stream_1.data_source.trigger('data', word_cloud_stream_1.data_source.data, word_cloud_stream_1.data_source.data)
+
+
+def plot_word_cloud_2():
+    x_rand_1 = random.sample(range(1, 100), top_count)
+    y_rand_1 = random.sample(range(1, 100), top_count)
+
+    word_1 = []
+    font_size_1 = []
+
+    dic = dict(top_tf_normalized_stream2)
+    s = sum(list(dic.values()))
+    for key, value in dic.items():
+        word_1.append(key)
+        val = (float)(value / s) * 100
+        font_size_1.append("{0:.2f}".format(val) + 'pt')
+
+    source_cloud_2.data['x'] = x_rand_1
+    source_cloud_2.data['y'] = y_rand_1
+    source_cloud_2.data['font_size'] = font_size_1
+    source_cloud_2.data['word'] = word_1
+
+    #print("second", word_1, font_size_1)
+    # print("second", word)
+
+    #word_cloud_stream_2.data_source.trigger('data', word_cloud_stream_2.data_source.data,
+                                            #word_cloud_stream_2.data_source.data)
 
 def plot_source_bar_group():
     #streams = ['Stream 1', 'Stream 2']
@@ -311,7 +352,7 @@ def plot_source_bar_group():
     #print(count)
 
     new = dict(x=x, counts=count)
-    source_bar.stream(new)
+    source_bar.stream(new, 20)
 
     #bar_datasource
 
@@ -415,6 +456,7 @@ def update_visualization():
     plot_tweet_rate(tweet_rate, tweet_rate_2)
     update_pie()
     plot_word_cloud()
+    plot_word_cloud_2()
     update_scatter_plot()
     update_current_tweets()
     plot_source_bar_group()
@@ -437,17 +479,6 @@ def create_twitter_stream(api, topic, callback):
     myStream.filter(track=topic, async=True)
 
 
-####### Twitter API calls ################
-
-api_2 = get_twitter_api_handle(consumer_key_2, consumer_secret_2, access_token_2, access_token_secret_2)
-topic = ['football']
-create_twitter_stream(api_2, topic, listener_2())
-
-api_1 = get_twitter_api_handle(consumer_key_1, consumer_secret_1, access_token_1, access_token_secret_1)
-topic = ['north korea']
-create_twitter_stream(api_1, topic, listener_1())
-
-
 ######## Creating Visualizations ###############
 
 # Heading
@@ -466,12 +497,10 @@ current_tweets_plot = PreText(text=text, width=500, height=900)
 
 #------------------------------------------------------------------------------------------------------------------
 # Line chart for tweet rate
-columns = ['Timestamp', 'Tweet', 'rounded_time']
-
-df_tweet_1 = pd.DataFrame(columns=columns)
+df_tweet_1 = pd.DataFrame(columns=['Timestamp', 'Tweet', 'rounded_time'])
 df_tweet_1 = df_tweet_1.fillna(0)
 
-df_tweet_2 = pd.DataFrame(columns=columns)
+df_tweet_2 = pd.DataFrame(columns=['Timestamp', 'Tweet', 'rounded_time'])
 df_tweet_2 = df_tweet_2.fillna(0)
 
 tweet_rate_plot = figure(title='Tweet Rate', x_axis_type="datetime", plot_width=500, plot_height=300,
@@ -516,8 +545,36 @@ bar = device_tweet_plot.vbar(x='x', top='counts', width=0.9, source=source_bar, 
 
 #------------------------------------------------------------------------------------------------------------------
 # Word clouds for most frequent words
-word_cloud_stream_1 = figure(x_range=(-20, 120), y_range=(-20, 120), plot_width=500, plot_height=500)
-word_cloud_stream_2 = figure(x_range=(-20, 120), y_range=(-20, 120), plot_width=500, plot_height=500)
+#x_range=(-20, 120), y_range=(-20, 120),
+x_rand = random.sample(range(1, 100), top_count)
+y_rand = random.sample(range(1, 100), top_count)
+
+word_cloud_stream_1 = figure(x_range=(-20, 120), y_range=(-20, 120),plot_width=500, plot_height=500, tools="")
+
+df_stream_1 = pd.DataFrame(pd.np.empty((top_count, 2)) * pd.np.nan, columns=['word', 'weight'])
+df_stream_1['word'] = ''
+df_stream_1['weight'] = 5
+df_stream_1['font_size'] = df_stream_1['weight'].apply(lambda x: "{0:.2f}".format(x) + 'pt')
+
+df_stream_1['x'] = x_rand
+df_stream_1['y'] = y_rand
+source_cloud_1 = ColumnDataSource(data = dict(x = x_rand, y= y_rand,
+                                              word = df_stream_1['word'].tolist(), font_size = df_stream_1['font_size'].tolist()),)
+word_cloud_stream_1.text(x='x', y='y', text='word', text_font_size = 'font_size', source=source_cloud_1, text_color=color_stream_1)
+
+
+word_cloud_stream_2 = figure(x_range=(-20, 120), y_range=(-20, 120), plot_width=500, plot_height=500, tools="")
+df_stream_2 = pd.DataFrame(pd.np.empty((top_count, 2)) * pd.np.nan, columns=['word', 'weight'])
+df_stream_2['word'] = ''
+df_stream_2['weight'] = 5
+df_stream_2['font_size'] = df_stream_2['weight'].apply(lambda x: "{0:.2f}".format(x) + 'pt')
+
+df_stream_2['x'] = x_rand
+df_stream_2['y'] = y_rand
+source_cloud_2 = ColumnDataSource(data = dict(x=x_rand, y=y_rand,
+                                              word = df_stream_2['word'].tolist(), font_size = df_stream_2['font_size'].tolist()),)
+word_cloud_stream_2.text(x='x', y='y', text='word', text_font_size = 'font_size', source=source_cloud_2, text_color=color_stream_2)
+
 
 # Scatter plot for clustering using sentiment - Category 1
 cluster_data_stream1 = {
@@ -575,3 +632,13 @@ layout = layout([heading], [wgt_search], [l1, current_tweets_plot])
 
 doc.add_root(layout)
 doc.add_periodic_callback(update_visualization, 5000)
+
+####### Twitter API calls ################
+
+api_2 = get_twitter_api_handle(consumer_key_2, consumer_secret_2, access_token_2, access_token_secret_2)
+topic = ['trump']
+create_twitter_stream(api_2, topic, listener_2())
+
+api_1 = get_twitter_api_handle(consumer_key_1, consumer_secret_1, access_token_1, access_token_secret_1)
+topic = ['north korea']
+create_twitter_stream(api_1, topic, listener_1())
