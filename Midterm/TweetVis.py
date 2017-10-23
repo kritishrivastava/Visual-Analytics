@@ -18,12 +18,12 @@ import preprocessor as p
 from textblob import TextBlob
 
 from bokeh.plotting import *
-from bokeh.models import ColumnDataSource, HoverTool, Dropdown, PreText, Slider, Button, Label, Select,  FactorRange
+from bokeh.models import ColumnDataSource, HoverTool, Dropdown, PreText, Slider, Button, Label, Select, FactorRange
+from bokeh.models import HoverTool, CustomJS,BoxZoomTool, ResetTool, BoxSelectTool, LassoSelectTool, TextInput
 from bokeh.models.glyphs import Text
 from bokeh.plotting import figure
 from bokeh.layouts import widgetbox, gridplot, column, layout, row
-#from bokeh.charts import Bar
-from bokeh.transform import factor_cmap
+# from bokeh.transform import factor_cmap
 from bokeh.palettes import inferno
 
 from sklearn.feature_extraction.text import *
@@ -50,11 +50,11 @@ access_token_2="2273168329-px91XwVztXVPjrDGvvyKuQLCyOFi8Zd19NzakMP"
 access_token_secret_2="tN1RKG0v8jtaIfvoXOGeUry7v0IcPRPLSK5x3qf6UQu4C"
 
 #Kriti's account
-# consumer_key_1="VcJ7LgeONhabS1o0b6CUfnZY2"
-# consumer_secret_1="wvkRYBPU9bem0EoJR04uvfnCWIFNlXusoGLca6b4vCCJWuWxsb"
-#
-# access_token_1="921914312058384384-Uhqe3dePUkRuzjVKvAVPpoNlPclJMnh"
-# access_token_secret_1="crEaGnf626IpikzjxpwXopKvwzOqiYU6KRASF9phg4gaP"
+consumer_key_1="VcJ7LgeONhabS1o0b6CUfnZY2"
+consumer_secret_1="wvkRYBPU9bem0EoJR04uvfnCWIFNlXusoGLca6b4vCCJWuWxsb"
+
+access_token_1="921914312058384384-Uhqe3dePUkRuzjVKvAVPpoNlPclJMnh"
+access_token_secret_1="crEaGnf626IpikzjxpwXopKvwzOqiYU6KRASF9phg4gaP"
 
 words_stream_1 = []
 words_stream_2 = []
@@ -73,7 +73,7 @@ top_tf_normalized_stream1 = defaultdict(dict)
 top_tf_normalized_stream2 = defaultdict(dict)
 token_count_stream1 = 0
 token_count_stream2 = 0
-top_count = 20
+top_count = 50
 sentiment_stream1 = []
 sentiment_stream2 = []
 positive_stream1 = []
@@ -96,10 +96,8 @@ source_stream2 = defaultdict(int)
 def insert_time_series_data_1(ts, msg, src):
     global df_tweet_1
     df_tweet_1.loc[len(df_tweet_1)] = [ts, msg, np.NaN]
-
     if src not in devices:
         return
-
     value = source_stream1.get(src)
     if value is None:
         source_stream1[src] = 1
@@ -108,11 +106,9 @@ def insert_time_series_data_1(ts, msg, src):
 
 def insert_time_series_data_2(ts, msg, src):
     global df_tweet_2
-    df_tweet_2.loc[len(df_tweet_2.index)] = [ts, msg, np.NaN]
-
+    df_tweet_2.loc[len(df_tweet_2)] = [ts, msg, np.NaN]
     if src not in devices:
         return
-
     value = source_stream2.get(src)
     if value is None:
         source_stream2[src] = 1
@@ -242,10 +238,7 @@ def plot_tweet_rate(tweet_rate, tweet_rate_2):
 
 def update_pie():
     # Updating Pie chart
-    now = datetime.utcnow()
-    # start_ang = float(now.second / 60)
     start_ang = float(token_count_stream1 / (token_count_stream2 + token_count_stream1))
-    # end_ang = float(tweet_count_stream2 / (token_count_stream2 + token_count_stream1));
     starts = [0, start_ang]
     ends = [start_ang, 1]
     starts = [i * 2 * 3.14 for i in starts]
@@ -256,178 +249,145 @@ def update_pie():
 
 def update_current_tweets():
     # Update the current tweets box
-    text = "LATEST TWEETS\n "
-    for i in range(len(all_tweets_stream1)-1,0,-1):
-        text = text + all_tweets_stream1[i] + "\n\n"
-    for i in range(len(all_tweets_stream2)-1,0,-1):
-        text = text + all_tweets_stream2[i] + "\n\n"
-    # for tweet in all_tweets_stream1:
-    #     text = text + tweet + "\n"
-    # for tweet in all_tweets_stream2:
-    #     text = text + tweet + "\n"
+    text = "---------------- LATEST TWEETS ------------------\n\n\n "
+    if len(all_tweets_stream1) > 20:
+        for tweet in reversed(all_tweets_stream1[-20:]):
+            text = text + tweet + "\n\n"
+    else:
+        for tweet in reversed(all_tweets_stream1):
+            text = text + tweet + "\n\n"
+    if len(all_tweets_stream2) > 20:
+        for tweet in reversed(all_tweets_stream2[-20:]):
+            text = text + tweet + "\n\n"
+    else:
+        for tweet in reversed(all_tweets_stream2):
+            text = text + tweet + "\n\n"
     current_tweets_plot.text = text
 
 def plot_word_cloud():
-
     word = []
     font_size = []
-
     x_rand = random.sample(range(1, 100), top_count)
     y_rand = random.sample(range(1, 100), top_count)
-
     dic = dict(top_tf_normalized_stream1)
-
-    #print(list(dic.values()))
-
-    #print(sum(list(dic.values())))
     s = sum(list(dic.values()))
-
-    #print(s)
-
     for key, value in dic.items():
         word.append(key)
         val = (float)(value/s) * 100
         font_size.append("{0:.2f}".format(val) + 'pt')
-
     source_cloud_1.data['x'] = x_rand
     source_cloud_1.data['y'] = y_rand
     source_cloud_1.data['font_size'] = font_size
     source_cloud_1.data['word'] = word
 
-    print("first", font_size)
-
-    #word_cloud_stream_1.data_source.trigger('data', word_cloud_stream_1.data_source.data, word_cloud_stream_1.data_source.data)
-
 
 def plot_word_cloud_2():
     x_rand_1 = random.sample(range(1, 100), top_count)
     y_rand_1 = random.sample(range(1, 100), top_count)
-
     word_1 = []
     font_size_1 = []
-
     dic = dict(top_tf_normalized_stream2)
     s = sum(list(dic.values()))
     for key, value in dic.items():
         word_1.append(key)
         val = (float)(value / s) * 100
         font_size_1.append("{0:.2f}".format(val) + 'pt')
-
     source_cloud_2.data['x'] = x_rand_1
     source_cloud_2.data['y'] = y_rand_1
     source_cloud_2.data['font_size'] = font_size_1
     source_cloud_2.data['word'] = word_1
 
-    #print("second", word_1, font_size_1)
-    # print("second", word)
-
-    #word_cloud_stream_2.data_source.trigger('data', word_cloud_stream_2.data_source.data,
-                                            #word_cloud_stream_2.data_source.data)
-
 def plot_source_bar_group():
-    #streams = ['Stream 1', 'Stream 2']
-
     df1 = pd.DataFrame([source_stream1])
     df1['origin'] = 'Stream 1'
-
     df2 = pd.DataFrame([source_stream2])
     df2['origin'] = 'Stream 2'
-
     df1.append(df2)
-
     x1 = []
     count = []
-
     for key, value in source_stream1.items():
         x1.append((key, 'Term 1'))
         count.append(value)
-        #device.add(key)
-
     for key, value in source_stream2.items():
         x1.append((key, 'Term 2'))
         count.append(value)
-        #device.add(key)
-
-    #print(x1)
-    #print(count)
-
     new = dict(x=x, counts=count)
     source_bar.stream(new, 20)
 
-    #bar_datasource
-
-    # bar_datasource.data['x'] = x1
-    # bar_datasource.data['counts'] = count
-    # bar_datasource.trigger('data', bar_datasource.data, bar_datasource.data)
-
-    # source = ColumnDataSource(data=dict(x=x1, counts=count))
-    #
-    # device_tweet_plot = figure(x_range=FactorRange(*device), plot_width=600, plot_height=400,
-    #                            title="Number of Tweets per device type", toolbar_location=None, tools="")
-    #
-    # bar = device_tweet_plot.vbar(x='x', top='counts', width=0.9, source=source, line_color="white",
-    #                              fill_color=factor_cmap('x', palette=inferno(2), factors=streams))
-    # #bar_datasource = bar.data_source
-    #
-    # layout.children[2].children[0].children[1].children[0] = device_tweet_plot
-
 def update_scatter_plot():
-    global clustered_source_stream1, sentiment_colors
     # Updating Scatter plots - sentiment and kmeans stream 1
     x, y, color_labels = clustering(all_tweets_stream1)
-    clustered_source_stream1.data['x'] = x
-    clustered_source_stream1.data['y'] = y
-    kmeans_scatter1_datasource.data['x'] = x
-    kmeans_scatter1_datasource.data['y'] = y
+    source.data['x'] = x
+    source.data['y'] = y
     colors = []
+    kmeans_legend = []
     for label in color_labels:
         if label == 0:
             colors.append("Blue")
+            kmeans_legend.append("Cluster 1")
         elif label == 1:
             colors.append("#FF9E00")
+            kmeans_legend.append("Cluster 2")
         else:
             colors.append("Magenta")
-    kmeans_scatter1_datasource.data['fill_color'] = colors
+            kmeans_legend.append("Cluster 3")
+    source.data['kmeans_color_stream1'] = colors
+    source.data['kmeans_legend'] = kmeans_legend
     colors_sentiment = []
+    sentiment_legend = []
     for sentiment in sentiment_stream1:
         if sentiment == 0:
             colors_sentiment.append("#FFFF33")
+            sentiment_legend.append("Neutral")
         elif sentiment > 0:
             colors_sentiment.append("#3cb44b")
+            sentiment_legend.append("Positive")
         else:
             colors_sentiment.append("#e6194b")
-    clustered_source_stream1.data['sentiment_colors'] = colors_sentiment
-    sentiment_colors = colors_sentiment
-        # clustered_source_stream1.data['sentiment_colors']
+            sentiment_legend.append("Negative")
+    source.data['sentiment_color_stream1'] = colors_sentiment
+    source.data['sentiment_legend'] = sentiment_legend
+    source.data['tweet_text'] = all_tweets_stream1
+
     # Updating Scatter plots - sentiment and kmeans stream 2
     x2, y2, color_labels2 = clustering(all_tweets_stream2)
-    sentiment_scatter2_datasource.data['x'] = x2
-    sentiment_scatter2_datasource.data['y'] = y2
-    kmeans_scatter2_datasource.data['x'] = x2
-    kmeans_scatter2_datasource.data['y'] = y2
+    source2.data['x'] = x2
+    source2.data['y'] = y2
     colors2 = []
+    kmeans_legend2 = []
     for label in color_labels2:
         if label == 0:
             colors2.append("Blue")
+            kmeans_legend2.append("Cluster 1")
         elif label == 1:
             colors2.append("#FF9E00")
+            kmeans_legend2.append("Cluster 2")
         else:
             colors2.append("Magenta")
-    kmeans_scatter2_datasource.data['fill_color'] = colors2
+            kmeans_legend2.append("Cluster 3")
+    source2.data['kmeans_color_stream2'] = colors2
+    source2.data['kmeans_legend'] = kmeans_legend2
     colors_sentiment2 = []
+    sentiment_legend2 = []
     for sentiment in sentiment_stream2:
         if sentiment == 0:
             colors_sentiment2.append("#FFFF33")
+            sentiment_legend2.append("Neutral")
         elif sentiment > 0:
             colors_sentiment2.append("#3cb44b")
+            sentiment_legend2.append("Positive")
         else:
             colors_sentiment2.append("#e6194b")
-    sentiment_scatter2_datasource.data['fill_color'] = colors_sentiment2
+            sentiment_legend2.append("Negative")
+    source2.data['sentiment_color_stream2'] = colors_sentiment2
+    source2.data['sentiment_legend'] = sentiment_legend2
+    source2.data['tweet_text'] = all_tweets_stream2
+
     # Trigger change for each scatter plot
-    clustered_source_stream1.trigger('data', clustered_source_stream1.data, clustered_source_stream1.data)
-    sentiment_scatter2_datasource.trigger('data', sentiment_scatter2_datasource.data, sentiment_scatter2_datasource.data)
-    kmeans_scatter1_datasource.trigger('data', kmeans_scatter1_datasource.data, kmeans_scatter1_datasource.data)
-    kmeans_scatter2_datasource.trigger('data', kmeans_scatter2_datasource.data, kmeans_scatter2_datasource.data)
+    sentiment_scatter1.data_source.trigger('data', sentiment_scatter1.data_source.data, sentiment_scatter1.data_source.data)
+    sentiment_scatter2.data_source.trigger('data', sentiment_scatter2.data_source.data, sentiment_scatter2.data_source.data)
+    kmeans_scatter1.data_source.trigger('data', kmeans_scatter1.data_source.data, kmeans_scatter1.data_source.data)
+    kmeans_scatter2.data_source.trigger('data', kmeans_scatter2.data_source.data, kmeans_scatter2.data_source.data)
 
 # Function to update all the visualizations after time step
 def update_visualization():
@@ -459,12 +419,7 @@ def update_visualization():
     plot_word_cloud_2()
     update_scatter_plot()
     update_current_tweets()
-    plot_source_bar_group()
-    #print(source_stream1, source_stream2)
-
-def create_bar_plot():
-    # Bar chart for tweets per device
-    device_tweet_plot = figure(plot_width=600, plot_height=400, title="Number of Tweets per device type")
+    # plot_source_bar_group()
 
 def get_twitter_api_handle(consumer_key, consumer_secret, access_token, access_token_secret) :
     auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
@@ -482,152 +437,172 @@ def create_twitter_stream(api, topic, callback):
 ######## Creating Visualizations ###############
 
 # Heading
-heading = PreText(text="""CLUSTERING ALGORITHM ON WHOLESALE CUSTOMERS DATA""", height=25, width=500)
+heading = PreText(text="""\bANALYZING REAL TIME TWITTER DATA\b""", height=50, width=1500)
 
 #------------------------------------------------------------------------------------------------------------------
 # Catergory text search
-search_1 = PreText(text="""\n\nCategory 1 """, height=50, width=200)
-search_2 = PreText(text="""\n\nCategory 2 """, height=50, width=200)
-button_go = Button(label="Evaluate", width=100, button_type="success")
+search_1 = TextInput(value="default", title="Search Term 1:")
+search_2 = TextInput(value="default", title="Search Term 2:")
+button_go = Button(label="Compare", width=100, button_type="success")
 
 #------------------------------------------------------------------------------------------------------------------
 # Tweets display
 text = "Real Time Tweets-- \n"
-current_tweets_plot = PreText(text=text, width=500, height=900)
+current_tweets_plot = PreText(text=text, width=400, height=900)
 
 #------------------------------------------------------------------------------------------------------------------
 # Line chart for tweet rate
 df_tweet_1 = pd.DataFrame(columns=['Timestamp', 'Tweet', 'rounded_time'])
 df_tweet_1 = df_tweet_1.fillna(0)
-
 df_tweet_2 = pd.DataFrame(columns=['Timestamp', 'Tweet', 'rounded_time'])
 df_tweet_2 = df_tweet_2.fillna(0)
 
-tweet_rate_plot = figure(title='Tweet Rate', x_axis_type="datetime", plot_width=500, plot_height=300,
-                         tools=[])
+tweet_rate_plot = figure(title='Tweet Rate(per 5 seconds)', x_axis_type="datetime", plot_width=900, plot_height=250,tools=[HoverTool()])
 tweet_rate_plot.toolbar.logo = None
-
-line1 = tweet_rate_plot.line(x=[], y=[], line_width=2, color=color_stream_1, legend='Stream 1')
+tweet_rate_plot.xaxis.axis_label = "Time(in Minute:Second format)"
+tweet_rate_plot.yaxis.axis_label = "Count"
+line1 = tweet_rate_plot.line(x=[], y=[], line_width=2, color=color_stream_1, legend='Search Term 1')
 line1_datasource = line1.data_source
-
-line2 = tweet_rate_plot.line(x=[], y=[], line_width=2, color = color_stream_2, legend='Stream 2')
+line2 = tweet_rate_plot.line(x=[], y=[], line_width=2, color = color_stream_2, legend='Search Term 2')
 line2_datasource = line2.data_source
 
 #------------------------------------------------------------------------------------------------------------------
 # Pie chart for tweet division per category
 colors = [color_stream_1, color_stream_2]
-tweet_division_plot = figure(title='Total tweets for each search term', x_range=(-1, 1), y_range=(-1, 1),
-                             plot_width=300, plot_height=300)
-pie = tweet_division_plot.wedge(x=0, y=0, radius=1, start_angle=[], end_angle=[], color=colors)
+tweet_division_plot = figure(title='Total tweets Ratio', x_range=(-1, 1), y_range=(-1, 1),
+                             plot_width=250, plot_height=250)
+legend = ["Term 1","Term 2"]
+pie = tweet_division_plot.wedge(x=0, y=0, radius=1, start_angle=[], end_angle=[], color=colors, tags = legend)
 pie_datasource = pie.data_source
 tweet_division_plot.axis.visible = False
+tweet_division_plot.xgrid.grid_line_color = None
+tweet_division_plot.ygrid.grid_line_color = None
 
 #------------------------------------------------------------------------------------------------------------------
 # Bar chart for tweets per device
+device_tweet_plot = figure(plot_width=650, plot_height=300, title="Number of Tweets per device type")
 
-'Twitter for Android', 'Twitter for iPhone', 'Twitter Web Client'
-
-x = [('Twitter for Android', 'Stream 1'), ('Twitter for Android', 'Stream 2'),
-     ('Twitter for iPhone', 'Stream 1'), ('Twitter for iPhone', 'Stream 2'),
-     ('Twitter Web Client', 'Stream 1'), ('Twitter Web Client', 'Stream 2')]
-counts = [0, 0, 0, 0, 0, 0]
-
-streams = ['Stream 1', 'Stream 2']
-
-source_bar = ColumnDataSource(data=dict(x=x, counts=counts))
-
-device_tweet_plot = figure(x_range=FactorRange(*x), plot_width=600, plot_height=400,
-                            title="Number of Tweets per device type", toolbar_location=None, tools="")
-
-bar = device_tweet_plot.vbar(x='x', top='counts', width=0.9, source=source_bar, line_color="white",
-                             fill_color=factor_cmap('x', palette=[color_stream_1, color_stream_2], factors=streams, start=1, end=2))
-
+# x = [('Twitter for Android', 'Stream 1'), ('Twitter for Android', 'Stream 2'),
+#      ('Twitter for iPhone', 'Stream 1'), ('Twitter for iPhone', 'Stream 2'),
+#      ('Twitter Web Client', 'Stream 1'), ('Twitter Web Client', 'Stream 2')]
+# counts = [0, 0, 0, 0, 0, 0]
+# streams = ['Stream 1', 'Stream 2']
+# source_bar = ColumnDataSource(data=dict(x=x, counts=counts))
+# device_tweet_plot = figure(x_range=FactorRange(*x), plot_width=600, plot_height=400,
+#                             title="Number of Tweets per device type", toolbar_location=None, tools="")
+# bar = device_tweet_plot.vbar(x='x', top='counts', width=0.9, source=source_bar, line_color="white",
+#                              fill_color=factor_cmap('x', palette=[color_stream_1, color_stream_2], factors=streams, start=1, end=2))
 
 #------------------------------------------------------------------------------------------------------------------
 # Word clouds for most frequent words
-#x_range=(-20, 120), y_range=(-20, 120),
 x_rand = random.sample(range(1, 100), top_count)
 y_rand = random.sample(range(1, 100), top_count)
-
-word_cloud_stream_1 = figure(x_range=(-20, 120), y_range=(-20, 120),plot_width=500, plot_height=500, tools="")
-
+word_cloud_stream_1 = figure(x_range=(-20, 120), y_range=(-20, 120),plot_width=450, plot_height=350, tools="", title="Most Frequent words for Term 1")
 df_stream_1 = pd.DataFrame(pd.np.empty((top_count, 2)) * pd.np.nan, columns=['word', 'weight'])
 df_stream_1['word'] = ''
 df_stream_1['weight'] = 5
 df_stream_1['font_size'] = df_stream_1['weight'].apply(lambda x: "{0:.2f}".format(x) + 'pt')
-
 df_stream_1['x'] = x_rand
 df_stream_1['y'] = y_rand
-source_cloud_1 = ColumnDataSource(data = dict(x = x_rand, y= y_rand,
-                                              word = df_stream_1['word'].tolist(), font_size = df_stream_1['font_size'].tolist()),)
+source_cloud_1 = ColumnDataSource(data = dict(x = x_rand, y= y_rand, word = df_stream_1['word'].tolist(), font_size = df_stream_1['font_size'].tolist()),)
 word_cloud_stream_1.text(x='x', y='y', text='word', text_font_size = 'font_size', source=source_cloud_1, text_color=color_stream_1)
+word_cloud_stream_1.axis.visible = False
+word_cloud_stream_1.xgrid.grid_line_color = None
+word_cloud_stream_1.ygrid.grid_line_color = None
 
-
-word_cloud_stream_2 = figure(x_range=(-20, 120), y_range=(-20, 120), plot_width=500, plot_height=500, tools="")
+word_cloud_stream_2 = figure(x_range=(-20, 120), y_range=(-20, 120), plot_width=450, plot_height=350, tools="", title="Most Frequent words for Term 2")
 df_stream_2 = pd.DataFrame(pd.np.empty((top_count, 2)) * pd.np.nan, columns=['word', 'weight'])
 df_stream_2['word'] = ''
 df_stream_2['weight'] = 5
 df_stream_2['font_size'] = df_stream_2['weight'].apply(lambda x: "{0:.2f}".format(x) + 'pt')
-
 df_stream_2['x'] = x_rand
 df_stream_2['y'] = y_rand
-source_cloud_2 = ColumnDataSource(data = dict(x=x_rand, y=y_rand,
-                                              word = df_stream_2['word'].tolist(), font_size = df_stream_2['font_size'].tolist()),)
+source_cloud_2 = ColumnDataSource(data = dict(x=x_rand, y=y_rand, word = df_stream_2['word'].tolist(), font_size = df_stream_2['font_size'].tolist()),)
 word_cloud_stream_2.text(x='x', y='y', text='word', text_font_size = 'font_size', source=source_cloud_2, text_color=color_stream_2)
-
-
+word_cloud_stream_2.axis.visible = False
+word_cloud_stream_2.xgrid.grid_line_color = None
+word_cloud_stream_2.ygrid.grid_line_color = None
+#------------------------------------------------------------------------------------------------------------------
+# Scatter plot for stream 1
+scatterplot_width = 375
+scatterplot_height = 325
+source = ColumnDataSource(data=dict(
+    x=[0,0,0],
+    y=[0,0,0],
+    sentiment_color_stream1= ["red","red",'white'],
+    kmeans_color_stream1 = ["red","red",'white'],
+    tweet_text=['a','a','a'],
+    sentiment_legend = ["red","red",'white'],
+    kmeans_legend = ["red","red",'white'],
+))
+hover = HoverTool(tooltips=[
+    ("Tweet", "@tweet_text")
+])
+hover1 = HoverTool(tooltips=[
+    ("Tweet", "@tweet_text")
+])
 # Scatter plot for clustering using sentiment - Category 1
-cluster_data_stream1 = {
-    'x': [],
-    'y': [],
-    'kmeans_colors': [],
-    'sentiment_colors': []
-}
-clustered_source_stream1 = ColumnDataSource(data=cluster_data_stream1)
-scatterplot_width = 400
-sentiment_colors = []
-sentiment_stream1_plot = figure(plot_width=scatterplot_width, plot_height=scatterplot_width, title="Clustering using sentiments on Category 1")
-sentiment_scatter1 = sentiment_stream1_plot.circle(x='x', y='y', size=5,  source = clustered_source_stream1, line_color=None)
-# sentiment_scatter1_datasource = sentiment_scatter1.data_source
-# fill_color = 'sentiment_colors'
+sentiment_stream1_plot = figure(plot_width=scatterplot_width, plot_height=scatterplot_height, title="Clustering using sentiments on Term 1",
+                                tools=[hover, LassoSelectTool(), ResetTool()])
+sentiment_scatter1 = sentiment_stream1_plot.circle('x', 'y', size=5, fill_color="sentiment_color_stream1",
+                                                   line_color=None, legend='sentiment_legend', source=source)
 sentiment_stream1_plot.axis.visible = False
-sentiment_stream1_plot.xgrid.grid_line_color = None
-sentiment_stream1_plot.ygrid.grid_line_color = None
-
-# Scatter plot for clustering using sentiment - Category 2
-sentiment_stream2_plot = figure(plot_width=scatterplot_width, plot_height=scatterplot_width, title="Clustering using sentiments on Category 2")
-sentiment_scatter2 = sentiment_stream2_plot.circle(x=[], y=[], size=5, fill_color = [], line_color=None )
-sentiment_scatter2_datasource = sentiment_scatter2.data_source
-sentiment_stream2_plot.axis.visible = False
-sentiment_stream2_plot.xgrid.grid_line_color = None
-sentiment_stream2_plot.ygrid.grid_line_color = None
+# sentiment_stream1_plot.xgrid.grid_line_color = None
+# sentiment_stream1_plot.ygrid.grid_line_color = None
 
 # Scatter plot for clustering using kmeans - Category 1
-kmeans_stream1_plot = figure(plot_width=scatterplot_width, plot_height=scatterplot_width, title="MiniBatch-KMeans clustering on Category 1")
-kmeans_scatter1 = kmeans_stream1_plot.circle(x=[], y=[], size=5, fill_color = [], line_color=None )
-kmeans_scatter1_datasource = kmeans_scatter1.data_source
+kmeans_stream1_plot = figure(plot_width=scatterplot_width, plot_height=scatterplot_height, title="MiniBatch-KMeans clustering on Term 1",
+                             x_range=sentiment_stream1_plot.x_range, y_range=sentiment_stream1_plot.y_range, tools=[hover1, LassoSelectTool(), ResetTool()])
+kmeans_scatter1 = kmeans_stream1_plot.circle('x', 'y', size=5, fill_color = 'kmeans_color_stream1',
+                                             line_color=None, legend='kmeans_legend', source=source )
 kmeans_stream1_plot.axis.visible = False
-kmeans_stream1_plot.xgrid.grid_line_color = None
-kmeans_stream1_plot.ygrid.grid_line_color = None
+# kmeans_stream1_plot.xgrid.grid_line_color = None
+# kmeans_stream1_plot.ygrid.grid_line_color = None
+
+
+#------------------------------------------------------------------------------------------------------------------
+# Scatter plot for stream 2
+source2 = ColumnDataSource(data=dict(
+    x=[0,0,0],
+    y=[0,0,0],
+    sentiment_color_stream2= ["red","red",'white'],
+    kmeans_color_stream2 = ["red","red",'white'],
+    tweet_text=['a','a','a'],
+    sentiment_legend = ["red","red",'white'],
+    kmeans_legend = ["red","red",'white'],
+))
+hover2 = HoverTool(tooltips=[
+    ("Tweet", "@tweet_text")
+])
+hover21 = HoverTool(tooltips=[
+    ("Tweet", "@tweet_text")
+])
+
+# Scatter plot for clustering using sentiment - Category 2
+sentiment_stream2_plot = figure(plot_width=scatterplot_width, plot_height=scatterplot_height, title="Clustering using sentiments on Term 2",
+                                tools=[hover2, LassoSelectTool(), ResetTool()])
+sentiment_scatter2 = sentiment_stream2_plot.circle('x', 'y', size=5, fill_color="sentiment_color_stream2",
+                                                   line_color=None, legend='sentiment_legend', source=source2)
+sentiment_stream2_plot.axis.visible = False
+# sentiment_stream2_plot.xgrid.grid_line_color = None
+# sentiment_stream2_plot.ygrid.grid_line_color = None
 
 # Scatter plot for clustering using kmeans - Category 2
-kmeans_stream2_plot = figure(plot_width=scatterplot_width, plot_height=scatterplot_width, title="MiniBatch-KMeans clustering on Category 2")
-kmeans_scatter2 = kmeans_stream2_plot.circle(x=[], y=[], size=5, fill_color = [], line_color=None)
-kmeans_scatter2_datasource = kmeans_scatter2.data_source
+kmeans_stream2_plot = figure(plot_width=scatterplot_width, plot_height=scatterplot_height, title="MiniBatch-KMeans clustering on Term 2",
+                             x_range=sentiment_stream2_plot.x_range, y_range=sentiment_stream2_plot.y_range, tools=[hover21, LassoSelectTool(), ResetTool()])
+kmeans_scatter2 = kmeans_stream2_plot.circle('x', 'y', size=5, fill_color = 'kmeans_color_stream2',
+                                             line_color=None, legend='kmeans_legend', source=source2 )
 kmeans_stream2_plot.axis.visible = False
-kmeans_stream2_plot.xgrid.grid_line_color = None
-kmeans_stream2_plot.ygrid.grid_line_color = None
+# kmeans_stream2_plot.xgrid.grid_line_color = None
+# kmeans_stream2_plot.ygrid.grid_line_color = None
 
 
 #layout for the visualization
 wgt_search = row(widgetbox(search_1), widgetbox(search_2), widgetbox(button_go))
-
 l1 = layout([[tweet_rate_plot], [device_tweet_plot, tweet_division_plot],
                  [word_cloud_stream_1, word_cloud_stream_2],
                  [sentiment_stream1_plot,sentiment_stream2_plot],
                  [kmeans_stream1_plot,kmeans_stream2_plot]])
-
-#l2 = layout([heading], [wgt_search], [l1, current_tweets_plot])
 layout = layout([heading], [wgt_search], [l1, current_tweets_plot])
 
 doc.add_root(layout)
