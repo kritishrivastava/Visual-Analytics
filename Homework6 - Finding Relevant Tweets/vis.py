@@ -1,10 +1,11 @@
 import string
 import time
 from datetime import datetime, date
-import re
+import operator
 import simplejson
 from collections import defaultdict
 import warnings
+import random
 
 from bokeh.sampledata import us_states
 from bokeh.io import curdoc
@@ -13,6 +14,8 @@ from bokeh.layouts import widgetbox, gridplot, column, layout, row
 from bokeh.models import HoverTool, CustomJS,BoxZoomTool, ResetTool, BoxSelectTool, LassoSelectTool, TextInput
 from bokeh.plotting import figure
 from bokeh.plotting import figure, output_file, show
+from bokeh.layouts import widgetbox
+from bokeh.models.widgets import TextInput
 
 from nltk import word_tokenize
 from nltk.corpus import stopwords
@@ -76,7 +79,7 @@ def get_dataset():
     return tweet_dataset
 
 def process_tweet(tweet):
-    tweet = p.clean(tweet)
+    # tweet = p.clean(tweet)
     stop = stopwords.words('english') + list(string.punctuation)
     words = [i for i in word_tokenize(tweet.lower()) if i not in stop]
     return words
@@ -168,15 +171,15 @@ from nltk.corpus import wordnet
 
 
 def get_tweets_for_all_symptoms(tweet_dataset):
-    relevantWords = []
+    relevantWords = defaultdict(int)
     # relevantWords = lemmas
     relevantWordsSynsets = []
     for catch_word in ['flu', 'sick', 'fever', 'aches', 'pains', 'fatigue','coughing', 'vomiting' , 'diarrhea']:
         synonyms = wordnet.synsets(catch_word)
         lemmas = list(set(chain.from_iterable([catch_word.lemma_names() for catch_word in synonyms])))
         for word in lemmas:
-            if word not in relevantWords:
-                relevantWords.append(word)
+            if word not in relevantWords.keys():
+                relevantWords[word] = 0
         relevantWordsSynsets.extend(synonyms)
         # for i,j in enumerate(wordnet.synsets(catch_word)):
             # hypernyms = j.hypernyms()
@@ -219,96 +222,93 @@ def get_tweets_for_all_symptoms(tweet_dataset):
     #             else:
     #                 not_flu_tweet.add(items)
 
-    relevantWords.append('chills')
-    relevantWords.append('sweats')
-    relevantWords.append("illness")
-    relevantWords.remove("ill")
-    relevantWords.remove("demented")
-    relevantWords.remove("regorge")
-    relevantWords.remove("gruesome")
-    relevantWords.remove("regurgitate")
-    relevantWords.remove("unbalanced")
-    relevantWords.remove("fed_up")
-    relevantWords.remove("disgusted")
-    relevantWords.remove("spew")
-    relevantWords.remove("honk")
-    relevantWords.remove("purge")
-    relevantWords.remove("cat")
-    relevantWords.remove("disturbed")
-    relevantWords.remove("chuck")
-    relevantWords.remove("ghastly")
-    relevantWords.remove("grim")
-    relevantWords.remove("wan")
-    relevantWords.remove("unhinged")
-    relevantWords.remove("mad")
-    relevantWords.remove("grisly")
-    relevantWords.remove("crazy")
-    relevantWords.remove("languish")
-    relevantWords.remove("pine")
-    relevantWords.remove("smart")
-    relevantWords.remove("yearn")
-    relevantWords.remove("yen")
-    relevantWords.remove("hurt")
-    relevantWords.remove("trouble")
-    relevantWords.remove("annoyance")
-    relevantWords.remove("pain_in_the_ass")
-    relevantWords.remove("bother")
-    relevantWords.remove("outwear")
-    relevantWords.remove("wear_upon")
-    relevantWords.remove("wear")
-    relevantWords.remove("jade")
-    relevantWords.remove("wear_down")
+    # relevantWords.append('chills')
+    # relevantWords.append('sweats')
+    # relevantWords.append("illness")
+    # relevantWords.remove("ill")
+    # relevantWords.remove("demented")
+    # relevantWords.remove("regorge")
+    # relevantWords.remove("gruesome")
+    # relevantWords.remove("regurgitate")
+    # relevantWords.remove("unbalanced")
+    # relevantWords.remove("fed_up")
+    # relevantWords.remove("disgusted")
+    # relevantWords.remove("spew")
+    # relevantWords.remove("honk")
+    # relevantWords.remove("purge")
+    # relevantWords.remove("cat")
+    # relevantWords.remove("disturbed")
+    # relevantWords.remove("chuck")
+    # relevantWords.remove("ghastly")
+    # relevantWords.remove("grim")
+    # relevantWords.remove("wan")
+    # relevantWords.remove("unhinged")
+    # relevantWords.remove("mad")
+    # relevantWords.remove("grisly")
+    # relevantWords.remove("crazy")
+    # relevantWords.remove("languish")
+    # relevantWords.remove("pine")
+    # relevantWords.remove("smart")
+    # relevantWords.remove("yearn")
+    # relevantWords.remove("yen")
+    # relevantWords.remove("hurt")
+    # relevantWords.remove("trouble")
+    # relevantWords.remove("annoyance")
+    # relevantWords.remove("pain_in_the_ass")
+    # relevantWords.remove("bother")
+    # relevantWords.remove("outwear")
+    # relevantWords.remove("wear_upon")
+    # relevantWords.remove("wear")
+    # relevantWords.remove("jade")
+    # relevantWords.remove("wear_down")
     category_dict = {}
-    category_dict['flu']  = relevantWords
+    category_dict['flu']  = relevantWords.keys()
     flu_tweet = set()
     not_flu_tweet = set()
     for items in tweet_dataset["Tweet"]:
             original_tweet = items
-            items = re.sub('[' + string.punctuation + ']', '', items)
-            items = items.lower()
-            items_tweet = set(items.split())
+            items_tweet = set(process_tweet(items))
             if set(category_dict['flu']) & items_tweet:
+                commonWords = set.intersection(set(category_dict['flu']), items_tweet)
+                for word in list(commonWords):
+                    relevantWords[word] += 1
                 flu_tweet.add(original_tweet)
             else:
                 not_flu_tweet.add(original_tweet)
-    f = open('output.txt', 'w')
-    simplejson.dump(list(flu_tweet), f)
-    f.close()
-    f = open('not_output.txt', 'w')
-    simplejson.dump(list(not_flu_tweet), f)
-    f.close()
+    # Remove words with zero occurrences
+    relevantWords = {k: v for k, v in relevantWords.items() if v != 0}
     return relevantWords, flu_tweet, not_flu_tweet
 
-def get_tweets_from_word(catch_word, tweet_dataset):
-    relevantWords = []
+def get_tweets_from_word(symptoms, tweet_dataset):
+    catch_words = [x.strip() for x in symptoms.split(',')]
+    print (catch_words)
+    print(symptoms)
+    relevantWords = defaultdict(int)
     relevantWordsSynsets = []
-    synonyms = wordnet.synsets(catch_word)
-    lemmas = list(set(chain.from_iterable([catch_word.lemma_names() for catch_word in synonyms])))
-    for word in lemmas:
-        if word not in relevantWords:
-            relevantWords.append(word)
-    relevantWordsSynsets.extend(synonyms)
-    category_dict = {}
-    category_dict['relevant'] = relevantWords
-    relevant_tweet = set()
-    not_relevant_tweet = set()
-    for items in tweet_dataset["Tweet"]:
-        original_tweet = items
-        items = re.sub('[' + string.punctuation + ']', '', items)
-        items = items.lower()
-        items_tweet = set(items.split())
-        if set(category_dict['relevant']) & items_tweet:
-            relevant_tweet.add(original_tweet)
-        else:
-            not_relevant_tweet.add(original_tweet)
-    f = open('output.txt', 'w')
-    simplejson.dump(list(relevant_tweet), f)
-    f.close()
-    f = open('not_output.txt', 'w')
-    simplejson.dump(list(not_relevant_tweet), f)
-    f.close()
+    for catch_word in catch_words:
+        synonyms = wordnet.synsets(catch_word)
+        lemmas = list(set(chain.from_iterable([catch_word.lemma_names() for catch_word in synonyms])))
+        for word in lemmas:
+            if word not in relevantWords.keys():
+                relevantWords[word] = 0
+        relevantWordsSynsets.extend(synonyms)
+        category_dict = {}
+        category_dict['relevant'] = relevantWords.keys()
+        relevant_tweet = set()
+        not_relevant_tweet = set()
+        for items in tweet_dataset["Tweet"]:
+            original_tweet = items
+            items_tweet = set(process_tweet(items))
+            if set(category_dict['relevant']) & items_tweet:
+                commonWords = set.intersection(set(category_dict['relevant']),items_tweet)
+                for word in list(commonWords):
+                    relevantWords[word] +=1
+                relevant_tweet.add(original_tweet)
+            else:
+                not_relevant_tweet.add(original_tweet)
+    # Remove words with zero occurrences
+    relevantWords = {k: v for k, v in relevantWords.items() if v != 0 and k != catch_word}
     return relevantWords, relevant_tweet, not_relevant_tweet
-
 
 def get_trend(relevant_tweet):
     date_count = defaultdict(int)
@@ -324,19 +324,84 @@ def get_trend(relevant_tweet):
         counts.append(date_count[date])
     return dates, counts
 
-# relevantWords, relevant_tweet, not_relevant_tweet = get_tweets_for_all_symptoms(tweet_dataset)
-relevantWords, relevant_tweet, not_relevant_tweet = get_tweets_from_word("winter", tweet_dataset)
-dates, counts = get_trend(relevant_tweet)
-print(relevantWords)
-output_file("line.html")
-p = figure(plot_width=1000, plot_height=400, x_axis_type="datetime")
-# add a line renderer
-p.line(dates, counts, line_width=2)
-show(p)
+def plot_word_cloud(relevantWords):
+    word = []
+    font_size = []
+    if len(relevantWords.keys()) > 50:
+        relevantWords = dict(sorted(relevantWords.items(), key=operator.itemgetter(1), reverse=True)[:50])
+    top_count = len(relevantWords.keys())
+    x_rand = random.sample(range(1, 100), top_count)
+    y_rand = random.sample(range(1, 100), top_count)
+    dic = dict(relevantWords)
+    s = sum(list(dic.values()))
+    if s is 0:
+        return
+    for key, value in dic.items():
+        word.append(key)
+        val = (float)(value/s) * 100
+        font_size.append("{0:.2f}".format(val) + 'pt')
+    source_cloud_1.data['x'] = x_rand
+    source_cloud_1.data['y'] = y_rand
+    source_cloud_1.data['font_size'] = font_size
+    source_cloud_1.data['word'] = word
 
-f = open('relevant.txt', 'w')
-simplejson.dump(list(relevant_tweet), f)
-f.close()
-f = open('not_relevant.txt', 'w')
-simplejson.dump(list(not_relevant_tweet), f)
-f.close()
+def plot_trend_graph(dates, counts):
+    line1_datasource.data['x'] = dates
+    line1_datasource.data['y'] = counts
+    line1_datasource.trigger('data', line1_datasource.data, line1_datasource.data)
+
+def bt_compare_click():
+    print(search_1.value)
+    relevantWords, relevant_tweet, not_relevant_tweet = get_tweets_from_word(search_1.value, tweet_dataset)
+    print(relevantWords)
+    dates, counts = get_trend(relevant_tweet)
+    print(dates)
+    print(counts)
+    plot_word_cloud(relevantWords)
+    plot_trend_graph(dates, counts)
+
+
+# relevantWords, relevant_tweet, not_relevant_tweet = get_tweets_for_all_symptoms(tweet_dataset)
+relevantWords, relevant_tweet, not_relevant_tweet = get_tweets_from_word("flu, vomit", tweet_dataset)
+dates, counts = get_trend(relevant_tweet)
+
+########### Create Visualizations ##################
+
+# Line graph for trend
+plot_trend = figure(plot_width=950, plot_height=400, x_axis_type="datetime")
+# add a line renderer
+line1 = plot_trend.line(x= dates, y = counts, line_width=2)
+line1_datasource = line1.data_source
+
+# Widgets - Search, button
+button_go = Button(label="Search Revelant Tweets", width=100, button_type="success")
+button_go.on_click(bt_compare_click)
+
+default_search_1 = "flu, vomit"
+search_term_1 = default_search_1
+search_1 = TextInput(value=default_search_1, title="Enter Symptoms:")
+
+# Word clouds for most relevant words
+if len(relevantWords.keys()) > 50:
+    relevantWords = dict(sorted(relevantWords.items(), key=operator.itemgetter(1), reverse=True)[:50])
+top_count = len(relevantWords.keys())
+x_rand = random.sample(range(1, 100), top_count)
+y_rand = random.sample(range(1, 100), top_count)
+word_cloud_stream_1 = figure(x_range=(-20, 120), y_range=(-20, 120),plot_width=400, plot_height=400, tools=[BoxZoomTool(), ResetTool()], title="Revelant Words")
+word_cloud_stream_1.toolbar.logo = None
+df_stream_1 = pd.DataFrame(pd.np.empty((top_count, 2)) * pd.np.nan, columns=['word', 'weight'])
+df_stream_1['word'] = relevantWords.keys()
+df_stream_1['weight'] = relevantWords.values()
+df_stream_1['font_size'] = df_stream_1['weight'].apply(lambda x: "{0:.2f}".format(x) + 'pt')
+df_stream_1['x'] = x_rand
+df_stream_1['y'] = y_rand
+source_cloud_1 = ColumnDataSource(data = dict(x = x_rand, y= y_rand, word = df_stream_1['word'].tolist(), font_size = df_stream_1['font_size'].tolist()),)
+word_cloud_stream_1.text(x='x', y='y', text='word', text_font_size = 'font_size', source=source_cloud_1)
+word_cloud_stream_1.axis.visible = False
+word_cloud_stream_1.xgrid.grid_line_color = None
+word_cloud_stream_1.ygrid.grid_line_color = None
+
+wgt_search = row(widgetbox(search_1), widgetbox(button_go))
+layout = layout([wgt_search], [plot_trend, word_cloud_stream_1])
+doc = curdoc()
+doc.add_root(layout)
