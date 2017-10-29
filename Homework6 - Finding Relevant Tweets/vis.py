@@ -1,11 +1,13 @@
 import string
 import time
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
+import random
+
+import re
+#import simplejson
 import operator
-import simplejson
 from collections import defaultdict
 import warnings
-import random
 
 from bokeh.sampledata import us_states
 from bokeh.io import curdoc
@@ -13,73 +15,82 @@ from bokeh.models import ColumnDataSource, HoverTool, Dropdown, PreText, Slider,
 from bokeh.layouts import widgetbox, gridplot, column, layout, row
 from bokeh.models import HoverTool, CustomJS,BoxZoomTool, ResetTool, BoxSelectTool, LassoSelectTool, TextInput
 from bokeh.plotting import figure
-from bokeh.plotting import figure, output_file, show
-from bokeh.layouts import widgetbox
-from bokeh.models.widgets import TextInput
 
 from nltk import word_tokenize
-from nltk.corpus import stopwords
+from nltk.corpus import stopwords, wordnet
 from nltk.stem.snowball import SnowballStemmer
+
+from itertools import chain
 
 import preprocessor as p
 
 import pandas as pd
 
 import geocoder
-from geopy.geocoders import Nominatim, Baidu, Bing, GoogleV3
+from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut
 
-# Ignore warnings
-warnings.filterwarnings('ignore')
+from gensim.models import Word2Vec
 
 us_states = us_states.data.copy()
 
 default_search_1 = "sick"
 
+flag_play = False
+
 del us_states["HI"]
 del us_states["AK"]
 
+# Ignore warnings
+warnings.filterwarnings('ignore')
 
-from gensim.models import Word2Vec
-# Setting options for tweet preprocessing - remove URL and emoji
-# from preprocessor import s
-# p.set_options(p.OPT.URL, p.OPT.EMOJI)
-# p.set_options(p.OPT.URL, p.OPT.EMOJI)
-# p.set_options(p.OPT.EMOJI,p.OPT.RESERVED, p.OPT.URL, p.OPT.SMILEY)
+p.set_options(p.OPT.EMOJI,p.OPT.RESERVED, p.OPT.SMILEY, p.OPT.SMILEY)
 stemmer = SnowballStemmer("english")
 
 def get_dataset_1():
-    data1 = pd.read_csv("tweet_test.txt", delimiter='\t', error_bad_lines=False,
-                        names=['UserId', 'TwitterId', 'Tweet', 'CreatedAt'])
+    data1 = pd.read_csv("tweets.txt", delimiter='\t', error_bad_lines=False,
+                        names=['UserId', 'CreatedAt', 'Tweet', 'Words'])
     data1 = data1.dropna()
-    data1 = data1.drop(data1.index[data1["UserId"].str.contains("Friday")])
+    #data1 = data1.drop(data1.index[data1["UserId"].str.contains("Friday")])
+
     data1[['UserId']] = data1[['UserId']].astype(int)
     data1['Tweet'] = data1['Tweet'].astype(str)
     data1['CreatedAt'] = pd.to_datetime(data1['CreatedAt'], errors='coerce')
+    data1['Words'] = data1['Words'].astype(str)
     data1 = data1.dropna(subset=['CreatedAt'])
+    print(data1.shape)
+
     return data1
 
 def get_dataset_2():
+
     data2 = pd.read_csv("users.txt", delimiter='\t', error_bad_lines=False,
                         names=['UserId', 'Location', 'Lat', 'Long'])
     data2 = data2.dropna()
+
     data2['UserId'] = data2['UserId'].astype(int)
     data2['Location'] = data2['Location'].astype(str)
     data2['Lat'] = data2['Lat'].astype(float)
     data2['Long'] = data2['Long'].astype(float)
     data2 = data2.drop_duplicates()
+    print(data2.shape)
+
     return data2
 
 def get_dataset():
+
     data1 = get_dataset_1()
     data2 = get_dataset_2()
+
     tweet_dataset = pd.merge(data1, data2, on='UserId', how='inner')
     tweet_dataset = tweet_dataset.dropna()
+
     print(tweet_dataset.shape)
     return tweet_dataset
 
+
 def process_tweet(tweet):
-    # tweet = p.clean(tweet)
+    tweet = p.clean(tweet)
     stop = stopwords.words('english') + list(string.punctuation)
     words = [i for i in word_tokenize(tweet.lower()) if i not in stop]
     return words
@@ -96,27 +107,33 @@ class TweetSentences(object):
 def process_user_file():
     with open('training_set_users.txt') as f:
         lines = f.readlines()
-    #data1 = get_dataset_1()
-    #userid = list(data1.UserId.unique())
+
     dict_loc = {}
     geolocator = Nominatim()
-    #geolocator= GoogleV3()
+
     with open('users.txt') as f1:
         lines1 = f1.readlines()
+
     for line in lines1:
         x = line.split("\t")
         if len(x) < 2:
             continue
+
         dict_loc[x[1]] = (x[2], x[3])
+
     file = open('users.txt', 'a')
+
     count = 0
+
     for line in lines:
         if count < 27788:
             count = count + 1
             continue
+
         x = line.split("\t")
         if len(x) < 2:
             continue
+
         l = dict_loc.get(x[1])
         if l is None:
             while True:
@@ -129,160 +146,132 @@ def process_user_file():
                     print("Exception")
                     continue
                 break
+
             time.sleep(2)
         else:
             line = x[0] + "\t" + x[1].rstrip() + "\t" + l[0] + "\t" + l[1] + "\n"
         file.write(line)
         # users.remove(i)
+
         count = count + 1
         print(count)
+
     file.close()
 
 
 
 def process_tweet_dataset():
     dataset = get_dataset()
-    tweets = dataset['Tweet'].tolist()
+
     count = 0
-    file = open('abc.txt', 'w')
-    for tweet in tweets:
+
+    file = open('tweets.txt', 'w')
+
+    file1 = open('sentences.txt', 'w')
+
+    for index, row in dataset.iterrows():
+        tweet = row['Tweet']
         if not tweet:
             continue
+
         sentence = process_tweet(tweet)
         # tweets_cleaned.append(sentence)
         count = count + 1
         print(count)
         if (len(sentence) == 0):
             continue
-        file.writelines(','.join(sentence) + "\n")
+
+        x = ','.join(sentence)
+
+        line = str(row['UserId']) + "\t" + str(row['CreatedAt']) + "\t" + row['Tweet'] + "\t" + x + "\n"
+        file.write(line)
+        file1.write(x + "\n")
+
+    file.close()
+    file1.close()
 
 def cb_sldr_time(attr, old, new):
+    global prev_start, prev_end
+
     val = date_range_slider.value
     print(datetime.fromtimestamp(val[0]/1000), datetime.fromtimestamp(val[1]/1000))
+    start_date = datetime.fromtimestamp(val[0]/1000)
+    end_date = datetime.fromtimestamp(val[1]/1000)
 
-tweet_dataset = get_dataset()
-# print(tweet_dataset)
+    start_change = timedelta(0)
+    if start_date > prev_start:
+        start_change = start_date - prev_start
+    elif start_date < prev_start:
+        start_change = prev_start - start_date
 
-tweet_dataset.drop(tweet_dataset[(tweet_dataset.Lat < 20) | (tweet_dataset.Lat > 60)].index, inplace=True)
-tweet_dataset.drop(tweet_dataset[(tweet_dataset.Long < -150) | (tweet_dataset.Long > -50)].index, inplace=True)
+    end_change = timedelta(0)
+    if end_date > prev_end:
+        end_change = end_date - prev_end
+    elif end_date < prev_end:
+        end_change = prev_end - end_date
 
-from itertools import chain
-from nltk.corpus import wordnet
+    print(int(start_change.total_seconds()), int(end_change.total_seconds()))
+
+    if(int(start_change.total_seconds()) < 86400 | int(end_change.total_seconds()) < 86400):
+        return
+    else:
+        prev_end = end_date
+        prev_start = start_date
+
+    tweet_subset = tweet_dataset[(tweet_dataset.CreatedAt > start_date) & (tweet_dataset.CreatedAt < end_date)]
+    print(tweet_subset.shape)
+    src.data['Long'] = tweet_subset['Long'].tolist()
+    src.data['Lat'] = tweet_subset['Lat'].tolist()
+    src.data['CreatedAt'] = tweet_subset['CreatedAt'].tolist()
+    src.data['tweet_text'] = tweet_subset['Tweet'].tolist()
+    plt_src.data_source.trigger('data', plt_src.data_source.data,
+                                plt_src.data_source.data)
+    print(start_date, end_date)
+
+#process_user_file()
+
+def update_visualization():
+    global curr_dt
+    global flag_play
+
+    tweet_subset = tweet_dataset[tweet_dataset.CreatedAt < curr_dt]
+    src.data['Long'] = tweet_subset['Long'].tolist()
+    src.data['Lat'] = tweet_subset['Lat'].tolist()
+    src.data['CreatedAt'] = tweet_subset['CreatedAt'].tolist()
+    plt_src.data_source.trigger('data', plt_src.data_source.data,
+                                plt_src.data_source.data)
+
+    x = sldr_rate.value
+    curr_dt = curr_dt + timedelta(hours=x)
+
+    print(curr_dt)
+    #print(curr_dt.date())
+
+    date_range_slider.start = curr_dt.date()
+    date_range_slider.end = curr_dt.date()
+
+    if(curr_dt > end) :
+        doc.remove_periodic_callback(update_visualization)
+        flag_play = False
+        button_play.label = 'Play'
 
 
-def get_tweets_for_all_symptoms(tweet_dataset):
-    relevantWords = defaultdict(int)
-    # relevantWords = lemmas
-    relevantWordsSynsets = []
-    for catch_word in ['flu', 'sick', 'fever', 'aches', 'pains', 'fatigue','coughing', 'vomiting' , 'diarrhea']:
-        synonyms = wordnet.synsets(catch_word)
-        lemmas = list(set(chain.from_iterable([catch_word.lemma_names() for catch_word in synonyms])))
-        for word in lemmas:
-            if word not in relevantWords.keys():
-                relevantWords[word] = 0
-        relevantWordsSynsets.extend(synonyms)
-        # for i,j in enumerate(wordnet.synsets(catch_word)):
-            # hypernyms = j.hypernyms()
-            # hyper_lemmas = list(set(chain.from_iterable([word.lemma_names() for word in hypernyms])))
-            # for word in hyper_lemmas:
-            #     if word not in relevantWords:
-            #         relevantWords.append(word)
-            # hyponyms = j.hyponyms()
-            # hypo_lemmas = list(set(chain.from_iterable([word.lemma_names() for word in hyponyms])))
-            # for word in hypo_lemmas:
-            #     if word not in relevantWords:
-            #         relevantWords.append(word)
-            # member_holonyms = j.member_holonyms()
-            # member_holonyms_lemmas = list(set(chain.from_iterable([word.lemma_names() for word in member_holonyms])))
-            # for word in member_holonyms_lemmas:
-            #     if word not in relevantWords:
-            #         relevantWords.append(word)
-            # part_meronyms = j.part_meronyms()
-            # part_meronyms_lemmas = list(set(chain.from_iterable([word.lemma_names() for word in part_meronyms])))
-            # for word in part_meronyms_lemmas:
-            #     if word not in relevantWords:
-            #         relevantWords.append(word)
-            # relevantWordsSynsets.extend(hypernyms)
-            # relevantWordsSynsets.extend(hyponyms)
-            # relevantWordsSynsets.extend(member_holonyms)
-            # relevantWordsSynsets.extend(part_meronyms)
+def bt_play_click():
+    global flag_play, curr_dt
 
-    ## similarity
-    # for items in tweet_dataset["Tweet"]:
-    #         items_tweet = list(items.split())
-    #         if set(category_dict['flu']) & set(items_tweet):
-    #             flu_tweet.add(items)
-    #         else:
-    #             wordFromList1 = wordnet.synsets(items_tweet[0])
-    #             allsyns1 = relevantWordsSynsets
-    #             allsyns2 = set(ss for word in items_tweet for ss in wordnet.synsets(word))
-    #             best = max((wordnet.wup_similarity(s1, s2) or 0, s1, s2) for s1, s2 in product(allsyns1, allsyns2))
-    #             if(best[0] > 0.9):
-    #                 flu_tweet.add(items)
-    #             else:
-    #                 not_flu_tweet.add(items)
-
-    # relevantWords.append('chills')
-    # relevantWords.append('sweats')
-    # relevantWords.append("illness")
-    # relevantWords.remove("ill")
-    # relevantWords.remove("demented")
-    # relevantWords.remove("regorge")
-    # relevantWords.remove("gruesome")
-    # relevantWords.remove("regurgitate")
-    # relevantWords.remove("unbalanced")
-    # relevantWords.remove("fed_up")
-    # relevantWords.remove("disgusted")
-    # relevantWords.remove("spew")
-    # relevantWords.remove("honk")
-    # relevantWords.remove("purge")
-    # relevantWords.remove("cat")
-    # relevantWords.remove("disturbed")
-    # relevantWords.remove("chuck")
-    # relevantWords.remove("ghastly")
-    # relevantWords.remove("grim")
-    # relevantWords.remove("wan")
-    # relevantWords.remove("unhinged")
-    # relevantWords.remove("mad")
-    # relevantWords.remove("grisly")
-    # relevantWords.remove("crazy")
-    # relevantWords.remove("languish")
-    # relevantWords.remove("pine")
-    # relevantWords.remove("smart")
-    # relevantWords.remove("yearn")
-    # relevantWords.remove("yen")
-    # relevantWords.remove("hurt")
-    # relevantWords.remove("trouble")
-    # relevantWords.remove("annoyance")
-    # relevantWords.remove("pain_in_the_ass")
-    # relevantWords.remove("bother")
-    # relevantWords.remove("outwear")
-    # relevantWords.remove("wear_upon")
-    # relevantWords.remove("wear")
-    # relevantWords.remove("jade")
-    # relevantWords.remove("wear_down")
-    category_dict = {}
-    category_dict['flu']  = relevantWords.keys()
-    flu_tweet = set()
-    not_flu_tweet = set()
-    for items in tweet_dataset["Tweet"]:
-            original_tweet = items
-            items_tweet = set(process_tweet(items))
-            if set(category_dict['flu']) & items_tweet:
-                commonWords = set.intersection(set(category_dict['flu']), items_tweet)
-                for word in list(commonWords):
-                    relevantWords[word] += 1
-                flu_tweet.add(original_tweet)
-            else:
-                not_flu_tweet.add(original_tweet)
-    # Remove words with zero occurrences
-    relevantWords = {k: v for k, v in relevantWords.items() if v != 0}
-    return relevantWords, flu_tweet, not_flu_tweet
+    if flag_play is False:
+        #curr_dt = date_range_slider.start
+        doc.add_periodic_callback(update_visualization, 1000)
+        button_play.label = 'Pause'
+        flag_play = True
+    else:
+        doc.remove_periodic_callback(update_visualization)
+        button_play.label = 'Play'
+        flag_play = False
 
 def get_tweets_from_word(symptoms, tweet_dataset):
     catch_words = [x.strip() for x in symptoms.split(',')]
-    print (catch_words)
-    print(symptoms)
+    print(catch_words)
     relevantWords = defaultdict(int)
     relevantWordsSynsets = []
     for catch_word in catch_words:
@@ -292,27 +281,30 @@ def get_tweets_from_word(symptoms, tweet_dataset):
             if word not in relevantWords.keys():
                 relevantWords[word] = 0
         relevantWordsSynsets.extend(synonyms)
-        category_dict = {}
-        category_dict['relevant'] = relevantWords.keys()
-        relevant_tweet = set()
-        not_relevant_tweet = set()
-        for items in tweet_dataset["Tweet"]:
-            original_tweet = items
-            items_tweet = set(process_tweet(items))
-            if set(category_dict['relevant']) & items_tweet:
-                commonWords = set.intersection(set(category_dict['relevant']),items_tweet)
-                for word in list(commonWords):
-                    relevantWords[word] +=1
-                relevant_tweet.add(original_tweet)
-            else:
-                not_relevant_tweet.add(original_tweet)
+    relevant_tweet = pd.DataFrame(columns=["Tweet",'Lat',"Long", "CreatedAt"])
+    relevant_tweets_only = []
+    not_relevant_tweet = []
+    # print(tweet_dataset["Words"])
+    for index, row in tweet_dataset.iterrows():
+        items = row['Words']
+        items_tweet = [x.strip() for x in items.split(',')]
+        found = 0
+        for word in items_tweet:
+            if word in relevantWords.keys():
+                relevantWords[word] += 1
+                relevant_tweets_only.append(row["Tweet"])
+                relevant_tweet.loc[len(relevant_tweet)] = [row["Tweet"], row["Lat"], row["Long"],row["CreatedAt"] ]
+                found  = 1
+                break
+        # if found == 0:
+        #     not_relevant_tweet.append(original_tweet)
     # Remove words with zero occurrences
     relevantWords = {k: v for k, v in relevantWords.items() if v != 0 and k != catch_word}
-    return relevantWords, relevant_tweet, not_relevant_tweet
+    return relevantWords, relevant_tweet, not_relevant_tweet, relevant_tweets_only
 
-def get_trend(relevant_tweet):
+def get_trend(relevant_tweets_only):
     date_count = defaultdict(int)
-    for tweet in relevant_tweet:
+    for tweet in relevant_tweets_only:
         for tweet1 in tweet_dataset.itertuples():
             if tweet == tweet1[3]:
                 date = tweet1[4].date()
@@ -338,7 +330,7 @@ def plot_word_cloud(relevantWords):
         return
     for key, value in dic.items():
         word.append(key)
-        val = (float)(value/s) * 100
+        val = (float)(value/s) * 10
         font_size.append("{0:.2f}".format(val) + 'pt')
     source_cloud_1.data['x'] = x_rand
     source_cloud_1.data['y'] = y_rand
@@ -352,24 +344,43 @@ def plot_trend_graph(dates, counts):
 
 def bt_compare_click():
     print(search_1.value)
-    relevantWords, relevant_tweet, not_relevant_tweet = get_tweets_from_word(search_1.value, tweet_dataset)
+    relevantWords, relevant_tweet, not_relevant_tweet, relevant_tweets_only = get_tweets_from_word(search_1.value, tweet_dataset)
     print(relevantWords)
-    dates, counts = get_trend(relevant_tweet)
+    dates, counts = get_trend(relevant_tweets_only)
     print(dates)
     print(counts)
     plot_word_cloud(relevantWords)
     plot_trend_graph(dates, counts)
 
 
+def word_2_vec_computation():
+
+    sentences = TweetSentences('sentences.txt')  # a memory-friendly iterator
+    model = Word2Vec(sentences, iter=10)
+
+    model.save('w2v.model')
+
+    #print(model.most_similar('flu', topn=5))
+
+
+#process_tweet_dataset()
+#word_2_vec_computation()
+
+
+########################get Dataset
+tweet_dataset = get_dataset()
+tweet_dataset.drop(tweet_dataset[(tweet_dataset.Lat < 20) | (tweet_dataset.Lat > 60)].index, inplace=True)
+tweet_dataset.drop(tweet_dataset[(tweet_dataset.Long < -150) | (tweet_dataset.Long > -50)].index, inplace=True)
+
+
 # relevantWords, relevant_tweet, not_relevant_tweet = get_tweets_for_all_symptoms(tweet_dataset)
-relevantWords, relevant_tweet, not_relevant_tweet = get_tweets_from_word("flu, vomit", tweet_dataset)
-dates, counts = get_trend(relevant_tweet)
+relevantWords, relevant_tweet, not_relevant_tweet, relevant_tweets_only = get_tweets_from_word("flu, vomit", tweet_dataset)
+dates, counts = get_trend(relevant_tweets_only)
 
 ########### Create Visualizations ##################
 
 # Line graph for trend
 plot_trend = figure(plot_width=950, plot_height=400, x_axis_type="datetime")
-# add a line renderer
 line1 = plot_trend.line(x= dates, y = counts, line_width=2)
 line1_datasource = line1.data_source
 
@@ -380,6 +391,52 @@ button_go.on_click(bt_compare_click)
 default_search_1 = "flu, vomit"
 search_term_1 = default_search_1
 search_1 = TextInput(value=default_search_1, title="Enter Symptoms:")
+
+
+################################
+src = ColumnDataSource(data=dict(Lat=[], Long=[], CreatedAt=[],
+                                 tweet_text=[]))
+# separate latitude and longitude points for the borders
+#   of the states.
+state_xs = [us_states[code]["lons"] for code in us_states]
+state_ys = [us_states[code]["lats"] for code in us_states]
+
+hover2 = HoverTool(tooltips=[
+    ("Tweet", "@tweet_text")
+])
+
+# init figure
+plot_tweet = figure(title="Tweets Plot", toolbar_location="left",
+                    plot_width=1100, plot_height=700, tools=[hover2, LassoSelectTool(), ResetTool()])
+
+# Draw state lines
+plot_tweet.patches(state_xs, state_ys, fill_alpha=0.0,
+    line_color="#884444", line_width=1.5)
+
+plt_src = plot_tweet.circle(x='Long', y='Lat', size=2, color='Red', source=src)
+plot_tweet.axis.visible = False
+plot_tweet.xgrid.grid_line_color = None
+plot_tweet.ygrid.grid_line_color = None
+
+#####################slider, play buttons
+sldr_rate = Slider(start=1, end=720, value=24, step=1, title="Rate", width=200)
+start = tweet_dataset.CreatedAt.min()
+end = tweet_dataset.CreatedAt.max()
+
+prev_start = start
+prev_end = end
+
+end_dt = start + timedelta(hours=24)
+
+curr_dt = start
+
+print(start, end, curr_dt)
+date_range_slider = DateRangeSlider(title="Date Range: ", start=start.date(), end=end_dt.date(), value=(start.date(), end.date()), step=1000000)
+date_range_slider.on_change('value', cb_sldr_time)
+
+button_play = Button(label="Play", width=100, button_type="success")
+button_play.on_click(bt_play_click)
+
 
 # Word clouds for most relevant words
 if len(relevantWords.keys()) > 50:
@@ -402,6 +459,10 @@ word_cloud_stream_1.xgrid.grid_line_color = None
 word_cloud_stream_1.ygrid.grid_line_color = None
 
 wgt_search = row(widgetbox(search_1), widgetbox(button_go))
-layout = layout([wgt_search], [plot_trend, word_cloud_stream_1])
+wgt_media = row(widgetbox(button_play), widgetbox(sldr_rate), widgetbox(date_range_slider))
+
 doc = curdoc()
+
+layout = layout([wgt_search], [plot_tweet], [wgt_media], [plot_trend, word_cloud_stream_1])
+
 doc.add_root(layout)
